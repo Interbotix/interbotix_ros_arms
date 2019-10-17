@@ -1,0 +1,51 @@
+<launch>
+  <arg name="robot_name"                        default=""/>
+  <arg name="robot_model"                       default="$(arg robot_name)"/>
+  <arg name="port"                              default="/dev/ttyDXL"/>
+  <arg name="use_default_rviz"                  default="true"/>
+  <arg name="use_default_gripper_bar"           default="true"/>
+  <arg name="use_default_gripper_fingers"       default="true"/>
+  <arg name="use_external_gripper_urdf"         default="false"/>
+  <arg name="external_gripper_urdf_loc"         default=""/>
+  <arg name="load_moveit_world_frame"           default="false"/>
+  <arg name="arm_operating_mode"                default="position"/>
+  <arg name="arm_profile_velocity"              default="131"/>
+  <arg name="arm_profile_acceleration"          default="15"/>
+  <arg name="gripper_operating_mode"            default="position"/>
+  <arg name="gripper_profile_velocity"          default="0"/>
+  <arg name="gripper_profile_acceleration"      default="0"/>
+
+  <include file="$(find interbotix_descriptions)/launch/description.launch">
+    <arg name="robot_name"                      value="$(arg robot_name)"/>
+    <arg name="robot_model"                     value="$(arg robot_model)"/>
+    <arg name="use_joint_pub"                   value="false"/>
+    <arg name="use_default_gripper_bar"         value="$(arg use_default_gripper_bar)"/>
+    <arg name="use_default_gripper_fingers"     value="$(arg use_default_gripper_fingers)"/>
+    <arg name="use_external_gripper_urdf"       value="$(arg use_external_gripper_urdf)"/>
+    <arg name="external_gripper_urdf_loc"       value="$(arg external_gripper_urdf_loc)"/>
+    <arg name="load_gazebo_material"            value="false"/>
+    <arg name="load_moveit_world_frame"         value="$(arg load_moveit_world_frame)"/>
+    <arg name="use_default_rviz"                value="$(arg use_default_rviz)"/>
+  </include>
+
+  <node
+    name="arm_node"
+    pkg="interbotix_sdk"
+    type="arm_node"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="robot_name"                    value="$(arg robot_name)"/>
+    <param name="motor_configs"                 value="$(find interbotix_sdk)/config/"/>
+    <param name="port"                          value="$(arg port)"/>
+    <param name="default_gripper_bar"           value="$(arg use_default_gripper_bar)"/>
+    <param name="default_gripper_fingers"       value="$(arg use_default_gripper_fingers)"/>
+    <param name="arm_operating_mode"            value="$(arg arm_operating_mode)"/>
+    <param name="arm_profile_velocity"          value="$(arg arm_profile_velocity)"/>
+    <param name="arm_profile_acceleration"      value="$(arg arm_profile_acceleration)"/>
+    <param name="gripper_operating_mode"        value="$(arg gripper_operating_mode)"/>
+    <param name="gripper_profile_velocity"      value="$(arg gripper_profile_velocity)"/>
+    <param name="gripper_profile_acceleration"  value="$(arg gripper_profile_acceleration)"/>
+    <param name="load_moveit_world_frame"       value="$(arg load_moveit_world_frame)"/>
+  </node>
+
+</launch>

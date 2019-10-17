@@ -1,0 +1,252 @@
+#!/usr/bin/env python
+
+import sys
+import signal
+from threading import Thread
+
+import rospy
+from tf.transformations import quaternion_from_euler
+from interbotix_moveit_interface.srv import MoveItPlanRequest
+from interbotix_moveit_interface.srv import MoveItPlan
+from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Pose
+from std_msgs.msg import String
+
+from python_qt_binding.QtCore import Qt
+from python_qt_binding.QtCore import Signal
+from python_qt_binding.QtGui import QFont
+from python_qt_binding.QtGui import QDoubleValidator
+from python_qt_binding.QtWidgets import QApplication
+from python_qt_binding.QtWidgets import QHBoxLayout
+from python_qt_binding.QtWidgets import QLabel
+from python_qt_binding.QtWidgets import QLineEdit
+from python_qt_binding.QtWidgets import QPushButton
+from python_qt_binding.QtWidgets import QSlider
+from python_qt_binding.QtWidgets import QVBoxLayout
+from python_qt_binding.QtWidgets import QWidget
+
+RANGE = 10000               # There are arbitrariliy 10,000 'steps' from one end of a slider bar to the other
+MAX_ARM_POS = 0.75          # Currently, the VX300 arm has the longest reach around 0.7 meters - so set that as the limit for the position slider bars
+MAX_ROT_POS = 3.14          # The max rotation a joint can possible do is 3.14 radians - so set that as the limit for the orientation slider bars
+
+
+class MoveItGUIInterface(QWidget):
+
+    ### @brief Initialization of the MoveItGUIInterface class; sets up the GUI layout and callback functions
+    def __init__(self):
+        super(MoveItGUIInterface, self).__init__()
+        rospy.wait_for_service('moveit_plan')
+        self.moveit_planner = rospy.ServiceProxy('moveit_plan', MoveItPlan)                 # Initialize the 'moveit_plan' service client
+        self.pose_map = {}                                                                  # Dictionary that maps an element in the 'param_list' below to a slider value and its associated text box
+        self.command = None                                                                 # An Enum value from the MoveItPlan service
+        self.r = rospy.Rate(10)                                                             # Rate at which the infinite loop (in the 'MoveItPlanClient' function) is run
+        font = QFont("Helvetica", 9, QFont.Bold)                                            # Font type and size for the GUI text
+        master_layout = QVBoxLayout()                                                       # Master container that holds all other 'sub containers'
+        param_list = ["x [m]", "y [m]", "z [m]", "roll [rad]", "pitch [rad]", "yaw [rad]"]  # List of dynamically configurable parameters
+        slider_list = []                                                                    # List that contains the 'slider containers' (each one contains a parameter name, textbox, and slider)
+
+        # Create each 'slider container'. This includes:
+        #   - a label showing one of the parameters in 'param_list'
+        #   - a textbox showing the current slider value and which can also be edited
+        #   - a slider that the user can drag to change a parameter's value
+        for name in param_list:
+            horizontal_layout = QHBoxLayout()
+            vertical_layout = QVBoxLayout()
+            label = QLabel(name)
+            label.setFont(font)
+            horizontal_layout.addWidget(label)
+            display = QLineEdit("0.00")
+            display.setAlignment(Qt.AlignRight)
+            display.setFont(font)
+            if "[m]" in name:
+                display.setValidator(QDoubleValidator(-MAX_ARM_POS, MAX_ARM_POS, 2))
+            else:
+                display.setValidator(QDoubleValidator(-MAX_ROT_POS, MAX_ROT_POS, 2))
+            horizontal_layout.addWidget(display)
+            vertical_layout.addLayout(horizontal_layout)
+            slider = QSlider(Qt.Horizontal)
+            slider.setFont(font)
+            slider.setRange(0, RANGE)
+            slider.setValue(RANGE/2)
+            vertical_layout.addWidget(slider)
+            slider_list.append(vertical_layout)
+            self.pose_map[name] = {'display': display, 'slider': slider}
+            slider.valueChanged.connect(lambda event,name=name: self.onSliderValueChangedOne(name))
+            display.editingFinished.connect(lambda name=name: self.onTextValueChangedOne(name))
+
+        # Organize the six 'slider containers' into 3 rows where each row has two columns.
+        # The first column is for end-effector position while the second column is for end-effector orientation.
+        # Then add these 'rows' to the 'master' container
+        num_rows = len(slider_list)/2
+        for i in range(num_rows):
+            horizontal_layout = QHBoxLayout()
+            slider_list[i].setContentsMargins(0, 0, 5, 0)
+            slider_list[i+num_rows].setContentsMargins(5, 0, 0, 0)
+            horizontal_layout.addLayout(slider_list[i])
+            horizontal_layout.addLayout(slider_list[i+num_rows])
+            master_layout.addLayout(horizontal_layout)
+
+        # Next, create the 'planning' and 'execute' buttons...
+        horizontal_button_layout = QHBoxLayout()
+
+        self.plan_pose_button = QPushButton('Plan Pose', self)
+        self.plan_pose_button.clicked.connect(self.plan_pose_event)
+        horizontal_button_layout.addWidget(self.plan_pose_button)
+
+        self.plan_position_button = QPushButton('Plan Position', self)
+        self.plan_position_button.clicked.connect(self.plan_position_event)
+        horizontal_button_layout.addWidget(self.plan_position_button)
+
+        self.plan_orientation_button = QPushButton('Plan Orientation', self)
+        self.plan_orientation_button.clicked.connect(self.plan_orientation_event)
+        horizontal_button_layout.addWidget(self.plan_orientation_button)
+
+        self.execute_button = QPushButton('Execute', self)
+        self.execute_button.setEnabled(False)
+        self.execute_button.clicked.connect(self.execute_event)
+        horizontal_button_layout.addWidget(self.execute_button)
+
+        master_layout.addLayout(horizontal_button_layout)
+
+        # Finally, create the 'Reset' button (sets all slider bars and textboxes to '0.00')
+        # and the status message label (tells user whether planning or execution attempt was successful)
+        horizontal_message_layout = QHBoxLayout()
+        self.reset_button = QPushButton('Reset', self)
+        self.reset_button.clicked.connect(self.reset_event)
+        horizontal_message_layout.addWidget(self.reset_button)
+        horizontal_message_layout.addStretch(1)
+        self.label = QLabel("Welcome! Use this GUI to plan and execute specific ee-poses.\nNote that not all combinations will work.")
+        self.label.setFont(font)
+        horizontal_message_layout.addWidget(self.label)
+        horizontal_message_layout.addStretch(1)
+        master_layout.addLayout(horizontal_message_layout)
+        self.setLayout(master_layout)
+
+        # Show the GUI!
+        self.show()
+
+    ### @brief If a slider's value changes, update its associated textbox field
+    ### @param name - name of a parameter as defined in 'param_list'
+    def onSliderValueChangedOne(self, name):
+        pose_info = self.pose_map[name]
+        if "[m]" in name:
+            ee_value = self.positionSliderToValue(pose_info['slider'].value())
+        else:
+            ee_value = self.orientationSliderToValue(pose_info['slider'].value())
+        pose_info['display'].setText("%.2f" % ee_value)
+
+    ### @brief If a textbox's text changes, update its associated slider's value
+    ### @param name - name of a parameter as defined in 'param_list'
+    def onTextValueChangedOne(self, name):
+        pose_info = self.pose_map[name]
+        if "[m]" in name:
+            slider_value = self.valueToPositionSlider(pose_info['display'].text())
+        else:
+            slider_value = self.valueToOrientationSlider(pose_info['display'].text())
+        pose_info['slider'].setValue(slider_value)
+
+    ### @brief When the 'Plan Pose' button is pressed, start the process of calling the service
+    ### @param event - callback event (not used)
+    def plan_pose_event(self, event):
+        self.plan(MoveItPlanRequest.CMD_PLAN_POSE)
+
+    ### @brief When the 'Plan Position' button is pressed, start the process of calling the service
+    ### @param event - callback event (not used)
+    def plan_position_event(self, event):
+        self.plan(MoveItPlanRequest.CMD_PLAN_POSITION)
+
+    ### @brief When the 'Plan Orientation' button is pressed, start the process of calling the service
+    ### @param event - callback event (not used)
+    def plan_orientation_event(self, event):
+        self.plan(MoveItPlanRequest.CMD_PLAN_ORIENTATION)
+
+    ### @brief Helper function to set the planning type if a 'planning' button is pressed
+    ### @param plan_type - An enum value describing the type of 'plan' to do
+    def plan(self, plan_type):
+        self.label.setText("Planning...")
+        self.command = plan_type
+
+    ### @brief When the 'Execute' button is pressed, start the process of calling the service
+    ### @param event - callback event (not used)
+    def execute_event(self, event):
+        self.label.setText("Executing...")
+        self.command = MoveItPlanRequest.CMD_EXECUTE
+
+    ### @brief When the 'Reset' button is pressed, set all slider positions to the middle; this will consequently reset the textbox fields to '0.00'
+    ### @param event - callback event (not used)
+    def reset_event(self, event):
+        for dict in self.pose_map.values():
+            dict['slider'].setValue(RANGE/2)
+
+    ### @brief Convert the raw slider value to a linear position in meters
+    ### @param slider - raw slider value out of 10,000
+    def positionSliderToValue(self, slider):
+        pctvalue = slider / float(RANGE)
+        return -MAX_ARM_POS + 2*MAX_ARM_POS * pctvalue
+
+    ### @brief Convert a position in meters to a raw slider value
+    ### @param value - current linear position [m]
+    def valueToPositionSlider(self, value):
+        pctvalue = (float(value) + MAX_ARM_POS)/(2*MAX_ARM_POS)
+        return int(pctvalue * float(RANGE))
+
+    ### @brief Convert the raw slider value to an angular position in radians
+    ### @param slider - raw slider value out of 10,000
+    def orientationSliderToValue(self, slider):
+        pctvalue = slider / float(RANGE)
+        return -MAX_ROT_POS + 2*MAX_ROT_POS * pctvalue
+
+    ### @brief Convert a position in radians to a raw slider value
+    ### @param value - current angular position [rad]
+    def valueToOrientationSlider(self, value):
+        pctvalue = (float(value) + MAX_ROT_POS)/(2*MAX_ROT_POS)
+        return int(pctvalue * float(RANGE))
+
+    ### @brief Function that runs in a seperate thread and is responsible for calling the 'moveit_plan' service
+    ### @details This function must run in its own thread since the service might take some time to return. Otherwise,
+    ###          the GUI would freeze and not respond to user inputs.
+    def MoveItPlanClient(self):
+        while not rospy.is_shutdown():
+            # If an 'Execute' request was received, call the service with the 'Execute' command
+            if self.command == MoveItPlanRequest.CMD_EXECUTE:
+                resp = self.moveit_planner(cmd=self.command)
+                rospy.loginfo(resp.msg.data)
+                # Update the message status label
+                self.label.setText(resp.msg.data)
+                # Gray out the 'Execute' button until another successful planning request was achieved
+                self.execute_button.setEnabled(False)
+                # Clear the command once it was acted upon
+                self.command = None
+            # If a 'Planning' request was received, call the service with the requested planning command and end-effector goal pose
+            elif self.command is not None:
+                pose = Pose()
+                roll = self.orientationSliderToValue(self.pose_map["roll [rad]"]["slider"].value())
+                pitch = self.orientationSliderToValue(self.pose_map["pitch [rad]"]["slider"].value())
+                yaw = self.orientationSliderToValue(self.pose_map["yaw [rad]"]["slider"].value())
+                pose.position.x = self.positionSliderToValue(self.pose_map["x [m]"]["slider"].value())
+                pose.position.y = self.positionSliderToValue(self.pose_map["y [m]"]["slider"].value())
+                pose.position.z = self.positionSliderToValue(self.pose_map["z [m]"]["slider"].value())
+                pose.orientation = Quaternion(*quaternion_from_euler(roll, pitch, yaw))
+                rospy.loginfo("Desired end-effector pose: x[m]: %.2f, y[m]: %.2f, z[m] %.2f, roll[rad]: %.2f, pitch[rad]: %.2f, yaw[rad]: %.2f."
+                              % (pose.position.x, pose.position.y, pose.position.z, roll, pitch, yaw))
+                resp = self.moveit_planner(self.command, pose)
+                rospy.loginfo(resp.msg.data)
+                # Update the message status label
+                self.label.setText(resp.msg.data)
+                if resp.success:
+                    # Reveal the 'Execute' button now that a successful plan was achieved
+                    self.execute_button.setEnabled(True)
+                # Clear the command once it was acted upon
+                self.command = None
+            self.r.sleep()
+
+
+if __name__ == '__main__':
+    rospy.init_node('moveit_gui_interface')
+    app = QApplication(sys.argv)
+    moveit_gui = MoveItGUIInterface()
+    # Start the 'MoveItPlanClient' function in its own thread
+    Thread(target=moveit_gui.MoveItPlanClient).start()
+    # Only kill the program at node shutdown
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    sys.exit(app.exec_())

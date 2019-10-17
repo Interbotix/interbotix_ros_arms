@@ -1,0 +1,32 @@
+<launch>
+
+  <arg name="robot_name"                         default=""/>
+  <arg name="use_gazebo"                         default="false"/>
+  <arg name="use_actual"                         default="false"/>
+  <arg name="arm_operating_mode"                 default="position"/>
+  <arg name="dof"                                default="5"/>
+
+  <include if="$(arg use_gazebo)" file="$(find interbotix_gazebo)/launch/gazebo.launch">
+    <arg name="robot_name"                       value="$(arg robot_name)"/>
+  </include>
+
+  <include if="$(arg use_actual)" file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                       value="$(arg robot_name)"/>
+    <arg name="use_default_rviz"                 value="false"/>
+    <arg name="load_moveit_world_frame"          value="true"/>
+    <arg name="arm_operating_mode"               value="$(arg arm_operating_mode)"/>
+    <arg name="arm_profile_velocity"             value="0"/>
+    <arg name="arm_profile_acceleration"         value="0"/>
+  </include>
+
+  <include file="$(find interbotix_moveit)/launch/move_group.launch" ns="$(arg robot_name)">
+    <arg name="publish_monitored_planning_scene" value="true" />
+    <arg name="robot_name"                       value="$(arg robot_name)"/>
+    <arg name="dof"                              value="$(arg dof)"/>
+  </include>
+
+  <include file="$(find interbotix_moveit)/launch/moveit_rviz.launch" ns="$(arg robot_name)">
+    <arg name="config"                           value="true"/>
+  </include>
+
+</launch>

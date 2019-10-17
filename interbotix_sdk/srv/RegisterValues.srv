@@ -1,0 +1,39 @@
+# Set or get the register(s) value(s) from motor(s)
+#
+# To get familiar with the register values, go to...
+# http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
+# ...click on a motor model, and scroll down to the 'Control Table of RAM Area' section.
+#
+# There are four options to set or get a register value:
+#   1) ARM_JOINTS_AND_GRIPPER - affects the register values for all joints, including the gripper.
+#   2) ARM_JOINTS - affects the register values for all joints, excluding the gripper.
+#   3) GRIPPER - affects the register value only for the gripper
+#   4) SINGLE_MOTOR - affects the register value for the motor specified by the 'id' parameter.
+#                     Note that the 'id' parameter only needs to be used for this option. For any
+#                     other option, it can be left blank.
+# Set the option to the 'cmd' parameter and the 'id' to the specified motor (if doing the
+# SINGLE_MOTOR option). 'id' is equivalent to the Dynamixel ID of the motor. To look up the motor IDs,
+# check out the robot-specific motor config files in the interbotix_sdk/config directory.
+#
+# Next, set the 'addr_name' parameter to the name of the register to be written to or read from.
+#
+# If setting the register(s) value, set the 'value' parameter to the desired value. This value will be
+# written to either one or many motors depending on the 'cmd' option selected. Note that if a joint is
+# controlled by two motors, both motors will be updated with the desired value.
+#
+# If reading the register(s) values, do not set the 'value' parameter. Instead, call the service at this
+# stage. The 'values' vector will be automatically updated with the register(s) value(s). If reading from
+# multiple joints at a time, the indexes of the values correspond with the joint names at those indexes in the
+# joint_states.name vector.
+
+int8 ARM_JOINTS_AND_GRIPPER = 1
+int8 ARM_JOINTS = 2
+int8 GRIPPER = 3
+int8 SINGLE_MOTOR = 4
+
+int8 cmd
+uint8 id
+string addr_name
+int32 value
+---
+int32[] values

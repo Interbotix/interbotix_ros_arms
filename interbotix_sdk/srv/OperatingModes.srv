@@ -1,0 +1,36 @@
+# Set the operating modes for the arm and/or gripper
+#
+# There are 5 valid operating modes for the arm. They are...
+#   "none" - arm motors will not respond to any joint command
+#   "position" - arm motors will expect only position commands
+#   "velocity" - arm motors will expect only velocity commands
+#   "current" - arm motors will expect only current commands
+#   "pwm" - arm motors will expect only pwm commands
+#
+# The gripper can also be set to "ext_position". This allows the gripper to do
+# multiple rotations instead of just one. It should only be used if you are using
+# a custom gripper capable of doing more than one rotation.
+#
+# For "position" control, profile_velocity sets the max speed of each joint while
+# profile_acceleration sets the max acceleration. Please reference the motor datasheet
+# (just click a motor at http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/)
+# for conversion factors. Values can be between 0 and 32,767. If setting custom profiles,
+# make sure to set 'use_custom_x_profiles' to true.
+#
+# For "velocity" control, only profile_acceleration is used.
+#
+# The velocity and acceleration profiles are not used in the "current" and "pwm" modes.
+#
+# Note that if the arm or gripper mode options are not set, the service will ignore
+# them. This is useful if you only want to change one operating mode and not the other.
+
+string arm_mode
+bool use_custom_arm_profiles
+int32 arm_profile_velocity
+int32 arm_profile_acceleration
+
+string gripper_mode
+bool use_custom_gripper_profiles
+int32 gripper_profile_velocity
+int32 gripper_profile_acceleration
+---

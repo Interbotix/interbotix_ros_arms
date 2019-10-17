@@ -1,0 +1,25 @@
+<launch>
+
+  <arg name="robot_name"                        default=""/>
+  <arg name="control_mode"                      default="pwm"/>
+  <arg name="gains_filepath"                    default="$(find interbotix_pid_control)/config/gains.yaml"/>
+
+  <rosparam command="load" file="$(arg gains_filepath)" ns="$(arg robot_name)"/>
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name)"/>
+    <arg name="arm_operating_mode"            value="$(arg control_mode)"/>
+    <arg name="gripper_operating_mode"        value="none"/>
+  </include>
+
+  <node
+    name="pid_control_node"
+    pkg="interbotix_pid_control"
+    type="pid_control_node"
+    respawn="false"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="control_mode"  value="$(arg control_mode)"/>
+  </node>
+
+</launch>

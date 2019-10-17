@@ -1,0 +1,37 @@
+# Send Position PID and/or Velocity PI gains to the firmware
+#
+# To get familiar with the register values, go to...
+# http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
+# ...click on a motor model, and scroll down to the 'Control Table of RAM Area' section.
+#
+# Set 'joint_id' to 0 if you want to specify pid gains for each joint separately.
+# Each column in the arrays below will then correspond to a single joint. Note that
+# this is the case even if the joint is controlled by two motors. Thus, the total
+# size of each array will be equivalent to the number of joints in the robot. Also,
+# joints are listed from the 'bottom-up'. For example, the indexes corresponding to
+# the WX200 robot would be [waist, shoulder, elbow, wrist_angle, wrist_rotate, gripper].
+#
+# Set 'joint_id' to 1 or higher to specify pid gains for only that joint. In this
+# case, 'joint_id' corresponds to the motor id specified in the robot-specific 'yaml'
+# file located in the 'config' directory. Additionally, the arrays below will all
+# have a length of 1.
+int8 joint_id
+
+# Each index in the arrays below correspond to a specific joint. Note that if a
+# joint is controlled by two motors, both motors' pid gains will change. Values
+# can range from 0 - 16,383.
+int32[] Kp_pos
+int32[] Ki_pos
+int32[] Kd_pos
+
+# In a similar fashion, the feed-forward velocity gains (K1) and feed-forward acceleration
+# gains (K2) can be specified. The range of values is the same as that for the PID gains.
+
+int32[] K1
+int32[] K2
+
+# Set Velocity PI gains similarly below.
+
+int32[] Kp_vel
+int32[] Ki_vel
+---

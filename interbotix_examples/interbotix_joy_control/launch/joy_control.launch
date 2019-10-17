@@ -1,0 +1,39 @@
+<launch>
+
+  <arg name="robot_name"                      default=""/>
+  <arg name="threshold"                       default="0.75"/>
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name)"/>
+    <arg name="arm_operating_mode"            value="velocity"/>
+    <arg name="arm_profile_acceleration"      value="0"/>
+    <arg name="gripper_operating_mode"        value="pwm"/>
+  </include>
+
+  <node
+    pkg="joy"
+    type="joy_node"
+    name="ps3_joy"
+    output="screen" >
+    <param name="dev"               value="/dev/input/js0" />
+  </node>
+
+  <node
+    pkg="interbotix_joy_control"
+    type="joy_control_node"
+    name="joy_control_node"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="threshold" value="$(arg threshold)"/>
+  </node>
+
+  <node
+    pkg="interbotix_joy_control"
+    type="joy_robot_control.py"
+    name="joy_robot_control"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="robot_name" value="$(arg robot_name)"/>
+  </node>
+
+</launch>
