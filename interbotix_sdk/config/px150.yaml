@@ -1,0 +1,109 @@
+# Refer to http://emanual.robotis.com/#control-table to look up the control registers for the various motors.
+#
+# SETUP OF REGISTERS FOR THE INTERBOTIX ARMS
+#
+# All registers were left to their default values except for the ones listed here:
+#   1) ID.........................The id of the Dynamixel servo. These range from 1 to 8 depending on the arm.
+#   2) Baud_Rate..................The speed at which serial communication occurs. All arms have this set to 1M
+#                                 baud (corresponds to a register value of '3')
+#   3) Return_Delay_Time..........The amount of time the servo delays in sending a reply packet after receiving a
+#                                 command packet. A value of '0' tells the servo to send a reply without any delay.
+#   4) Drive_Mode:................Used to define what direction is positive rotation. A value of '0' means CCW is
+#                                 positive while a value of '1' means CW is positive.
+#   5) Velocity_Limit.............Defines the max speed of the motor. A value of '131' correpsonds to a max speed
+#                                 of PI rad/s
+#   6) Min_Position_Limit.........Defines the minimum limit of a joint. Values range from 0 to 4095 with 2048
+#                                 being equivalent to '0' rad and 0 being '-PI' rad.
+#   7) Max_Position_Limit.........Defines the maximum limit of a joint. Values range from 0 to 4095 with 2048
+#                                 being equivalent to '0' rad and 4095 being 'PI' rad.
+#   8) Secondary_ID...............If a joint is controlled by two motors (usually by the shoulder or elbow), one motor
+#                                 can be set to follow the commands of another motor by setting this register to the ID
+#                                 of the master. A value of '255' disables this.
+#
+# Each motor's configs are grouped under the name of the joint the motor is controlling. The names are defined at
+# http://support.interbotix.com/ under the 'Specifications' section. (Click a robot and scroll down to the 'Default Joint Limits' section.)
+#
+# To make the process of loading and setting the configs more efficient, the 'order' sequence defines the order that the interbotix_sdk node should process the configs.
+
+
+order: [waist, shoulder, shoulder_shadow, elbow, elbow_shadow, wrist_angle, wrist_rotate, gripper]
+
+waist:
+  ID: 1
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 0
+  Max_Position_Limit: 4095
+  Secondary_ID: 255
+
+shoulder:
+  ID: 2
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 763
+  Max_Position_Limit: 3310
+  Secondary_ID: 255
+
+shoulder_shadow:
+  ID: 3
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 1
+  Velocity_Limit: 131
+  Min_Position_Limit: 763
+  Max_Position_Limit: 3310
+  Secondary_ID: 2
+
+elbow:
+  ID: 4
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 1
+  Velocity_Limit: 131
+  Min_Position_Limit: 968
+  Max_Position_Limit: 3412
+  Secondary_ID: 255
+
+elbow_shadow:
+  ID: 5
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 968
+  Max_Position_Limit: 3412
+  Secondary_ID: 4
+
+wrist_angle:
+  ID: 6
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 650
+  Max_Position_Limit: 3185
+  Secondary_ID: 255
+
+wrist_rotate:
+  ID: 7
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 0
+  Max_Position_Limit: 4095
+  Secondary_ID: 255
+
+gripper:
+  ID: 8
+  Baud_Rate: 3
+  Return_Delay_Time: 0
+  Drive_Mode: 0
+  Velocity_Limit: 131
+  Min_Position_Limit: 0
+  Max_Position_Limit: 4095
+  Secondary_ID: 255

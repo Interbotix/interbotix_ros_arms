@@ -1,0 +1,45 @@
+<launch>
+
+  <arg name="robot_name"                      default=""/>
+  <arg name="threshold"                       default="0.75"/>
+  <arg name="controller"                      default="ps4"/>
+  <arg name="start_non_gui_nodes"             default="true"/>
+  <arg name="use_default_rviz"                default="true"/>
+
+  <group if="$(arg start_non_gui_nodes)">
+
+    <include file="$(find interbotix_sdk)/launch/turret_run.launch">
+      <arg name="robot_name"                    value="$(arg robot_name)"/>
+      <arg name="use_default_rviz"              value="$(arg use_default_rviz)"/>
+    </include>
+
+    <node
+      pkg="joy"
+      type="joy_node"
+      name="joy_node"
+      output="screen"
+      ns="$(arg robot_name)" >
+      <param name="dev"               value="/dev/input/js0" />
+    </node>
+
+    <node
+      pkg="interbotix_turret_control"
+      type="turret_control_joy_node"
+      name="turret_control_joy_node"
+      output="screen"
+      ns="$(arg robot_name)">
+      <param name="threshold" value="$(arg threshold)"/>
+      <param name="controller" value="$(arg controller)"/>
+    </node>
+
+  </group>
+
+  <node
+    pkg="interbotix_turret_control"
+    type="turret_control"
+    name="turret_control"
+    output="screen"
+    ns="$(arg robot_name)">
+  </node>
+
+</launch>

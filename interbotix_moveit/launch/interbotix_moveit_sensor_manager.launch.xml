@@ -1,0 +1,6 @@
+<launch>
+  <!-- If you want to add some sensors, create a new directory in interbotix_moveit/config/ called 'sensors_3d'. -->
+  <!-- Inside that folder, create your sensor file as '$(arg robot_name)_sensors_3d.yaml' -->
+  <!-- Also make sure to uncomment the 'include' to this launch file in 'sensor_manager.launch.xml' as well as the 'rosparam' command to your config file -->
+  <arg name="robot_name" default=""/>
+</launch>

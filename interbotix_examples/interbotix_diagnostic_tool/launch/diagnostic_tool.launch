@@ -1,0 +1,49 @@
+<launch>
+
+  <arg name="robot_name"                    default=""/>
+  <arg name="cmd_joint"                     default="0"/>
+  <arg name="joint_id"                      default="0"/>
+  <arg name="test_duration"                 default="600"/>
+  <arg name="bag_name"                      default="new_bag"/>
+
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name)"/>
+  </include>
+
+  <node
+    name="diagnostic_tool_node"
+    pkg="interbotix_diagnostic_tool"
+    type="diagnostic_tool_node"
+    respawn="false"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="cmd_joint"       value="$(arg cmd_joint)"/>
+    <param name="test_duration"   value="$(arg test_duration)"/>
+  </node>
+
+  <node
+    name="$(arg robot_name)_plot_states"
+    pkg="rqt_plot"
+    type="rqt_plot"
+    args="/$(arg robot_name)/joint/commands/cmd[$(arg joint_id)] /$(arg robot_name)/joint_states/position[$(arg joint_id)] /$(arg robot_name)/joint_states/velocity[$(arg joint_id)]"/>
+
+  <node
+    name="$(arg robot_name)_plot_effort"
+    pkg="rqt_plot"
+    type="rqt_plot"
+    args="/$(arg robot_name)/joint_states/effort[$(arg joint_id)]"/>
+
+  <node
+    name="$(arg robot_name)_plot_temp"
+    pkg="rqt_plot"
+    type="rqt_plot"
+    args="/$(arg robot_name)/joint_temperatures/temps[$(arg joint_id)]"/>
+
+  <node
+    name="rosbag_record_states"
+    pkg="rosbag"
+    type="record"
+    args="record -O $(find interbotix_diagnostic_tool)/bag/$(arg bag_name) /$(arg robot_name)/joint/commands /$(arg robot_name)/joint_states /$(arg robot_name)/joint_temperatures"/>
+
+</launch>

@@ -1,0 +1,25 @@
+<launch>
+
+  <arg name="robot_name"                      default=""/>
+  <arg name="bag_name"                        default="$(arg robot_name)_commands"/>
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name)"/>
+  </include>
+
+  <node
+    name="puppet_control_single_node"
+    pkg="interbotix_puppet_control"
+    type="puppet_control_single_node"
+    respawn="false"
+    output="screen"
+    ns="$(arg robot_name)">
+  </node>
+
+  <node
+    name="rosbag_record_commands"
+    pkg="rosbag"
+    type="record"
+    args="record -O $(find interbotix_puppet_control)/bag/$(arg bag_name) /$(arg robot_name)/joint/commands /$(arg robot_name)/gripper/command"/>
+
+</launch>

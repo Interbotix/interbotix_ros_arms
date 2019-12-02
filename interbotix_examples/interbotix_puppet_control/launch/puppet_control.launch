@@ -1,0 +1,61 @@
+<launch>
+
+  <arg name="robot_model_1"                   default=""/>
+  <arg name="port_1"                          default="/dev/ttyUSB0"/>
+  <arg name="robot_model_2"                   default=""/>
+  <arg name="port_2"                          default="/dev/ttyUSB1"/>
+  <arg name="rvizconfig"                      default="$(find interbotix_puppet_control)/rviz/puppet_config.rviz" />
+
+  <arg name="robot_name_1" value="arm_1/$(arg robot_model_1)"/>
+  <arg name="robot_name_2" value="arm_2/$(arg robot_model_2)"/>
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name_1)"/>
+    <arg name="robot_model"                   value="$(arg robot_model_1)"/>
+    <arg name="port"                          value="$(arg port_1)"/>
+    <arg name="use_default_rviz"              value="false"/>
+  </include>
+
+  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+    <arg name="robot_name"                    value="$(arg robot_name_2)"/>
+    <arg name="robot_model"                   value="$(arg robot_model_2)"/>
+    <arg name="port"                          value="$(arg port_2)"/>
+    <arg name="use_default_rviz"              value="false"/>
+    <arg name="arm_operating_mode"            value="position"/>
+    <arg name="arm_profile_velocity"          value="0"/>
+    <arg name="arm_profile_acceleration"      value="0"/>
+    <arg name="gripper_operating_mode"        value="position"/>
+    <arg name="gripper_profile_velocity"      value="0"/>
+    <arg name="gripper_profile_acceleration"  value="0"/>
+  </include>
+
+  <node
+    name="puppet_control_node"
+    pkg="interbotix_puppet_control"
+    type="puppet_control_node"
+    respawn="false"
+    output="screen">
+    <param name="robot_name_1" value="$(arg robot_name_1)"/>
+    <param name="robot_name_2" value="$(arg robot_name_2)"/>
+  </node>
+
+  <node
+    name="robot_1_transform_broadcaster"
+    pkg="tf2_ros"
+    type="static_transform_publisher"
+    args="0 -0.25 0 0 0 0 /world /$(arg robot_name_1)/base_link"/>
+
+  <node
+    name="robot_2_transform_broadcaster"
+    pkg="tf2_ros"
+    type="static_transform_publisher"
+    args="0 0.25 0 0 0 0 /world /$(arg robot_name_2)/base_link"/>
+
+  <node
+    name="rviz"
+    pkg="rviz"
+    type="rviz"
+    args="-d $(arg rvizconfig)"
+    required="true"/>
+
+</launch>

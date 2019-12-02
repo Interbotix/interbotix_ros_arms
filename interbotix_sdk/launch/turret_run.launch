@@ -1,0 +1,46 @@
+<launch>
+  <arg name="robot_name"                        default=""/>
+  <arg name="robot_model"                       default="$(arg robot_name)"/>
+  <arg name="port"                              default="/dev/ttyDXL"/>
+  <arg name="use_default_rviz"                  default="false"/>
+  <arg name="use_external_urdf"                 default="false"/>
+  <arg name="external_urdf_loc"                 default=""/>
+  <arg name="turret_operating_mode"             default="position"/>
+  <arg name="turret_profile_velocity"           default="0"/>
+  <arg name="turret_profile_acceleration"       default="0"/>
+
+  <include file="$(find interbotix_descriptions)/launch/description.launch">
+    <arg name="robot_name"                      value="$(arg robot_name)"/>
+    <arg name="robot_model"                     value="$(arg robot_model)"/>
+    <arg name="use_joint_pub"                   value="false"/>
+    <arg name="use_default_gripper_bar"         value="false"/>
+    <arg name="use_default_gripper_fingers"     value="false"/>
+    <arg name="use_external_gripper_urdf"       value="$(arg use_external_urdf)"/>
+    <arg name="external_gripper_urdf_loc"       value="$(arg external_urdf_loc)"/>
+    <arg name="load_gazebo_material"            value="false"/>
+    <arg name="load_moveit_world_frame"         value="false"/>
+    <arg name="use_default_rviz"                value="$(arg use_default_rviz)"/>
+  </include>
+
+  <node
+    name="arm_node"
+    pkg="interbotix_sdk"
+    type="arm_node"
+    output="screen"
+    ns="$(arg robot_name)">
+    <param name="robot_name"                    value="$(arg robot_name)"/>
+    <param name="robot_model"                   value="$(arg robot_model)"/>
+    <param name="motor_configs"                 value="$(find interbotix_sdk)/config/"/>
+    <param name="port"                          value="$(arg port)"/>
+    <param name="default_gripper_bar"           value="false"/>
+    <param name="default_gripper_fingers"       value="false"/>
+    <param name="arm_operating_mode"            value="$(arg turret_operating_mode)"/>
+    <param name="arm_profile_velocity"          value="$(arg turret_profile_velocity)"/>
+    <param name="arm_profile_acceleration"      value="$(arg turret_profile_acceleration)"/>
+    <param name="gripper_operating_mode"        value="none"/>
+    <param name="gripper_profile_velocity"      value="0"/>
+    <param name="gripper_profile_acceleration"  value="0"/>
+    <param name="load_moveit_world_frame"       value="false"/>
+  </node>
+
+</launch>

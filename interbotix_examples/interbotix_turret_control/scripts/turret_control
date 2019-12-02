@@ -1,0 +1,1167 @@
+#!/usr/bin/env python
+
+import csv
+import sys
+import copy
+import math
+import signal
+import threading
+from os.path import expanduser
+
+import rospy
+from sensor_msgs.msg import JointState
+from std_srvs.srv import Empty
+from interbotix_sdk.msg import JointCommands
+from interbotix_sdk.srv import RegisterValues
+from interbotix_sdk.srv import RegisterValuesRequest
+from interbotix_sdk.srv import RobotInfo
+from interbotix_turret_control.msg import TurretControl
+
+from python_qt_binding.QtGui import QFont
+from python_qt_binding.QtGui import QBrush
+from python_qt_binding.QtGui import QColor
+from python_qt_binding.QtCore import Qt
+from python_qt_binding.QtCore import QTimer
+from python_qt_binding.QtWidgets import *
+from joystick import JoystickButton
+
+RANGE = 10000               # There are arbitrariliy 10,000 'steps' from one end of a slider bar to the other
+
+class TurretControlGUI(QWidget):
+
+    ### @brief Initialization of the TurretControlGUI class; sets up the GUI layout and callback functions
+    def __init__(self):
+        super(TurretControlGUI, self).__init__()
+        self.name_map = {}                                                                              # Dictionary used to access 'Pan', 'Tilt', or 'Velocity' related widgets
+        self.traj_list = []                                                                             # List where each row is a dictionary containing data from each row of the 'Trajectory' table
+        self.traj_index = 0                                                                             # Default index specifying a row in self.traj_list
+        self.rest_pos = [0, 0]                                                                          # Holds the current 'Pan' and 'Tilt' position commands when the 'Set Rest Position' button is pressed
+        self.joy_msg = TurretControl()                                                                  # Holds the external joystick controller commands
+        self.joy_speeds = {"course" : 1.5, "fine" : 1.5, "current" : 1.5}                               # Holds the 'course' and 'fine' speed values when using the external joystick controller
+        self.js_win = None                                                                              # Holds the mouse controlled joystick object (class details in joystick.py)
+        self.joint_states = None                                                                        # Holds the current joint states for the 'Pan' and 'Tilt' motors
+        self.close_gui = False                                                                          # Boolean specifying whether the GUI & ROS node should be shut down (does NOT shut down the 'arm_node')
+        self.start_delay = False                                                                        # Boolean specifying whether the QTimer should start 'counting down' to torqueing off the motors as they go to the Rest Position
+        self.start_trajectory = False                                                                   # Boolean specifying whether the QTimer should step through each row of the 'Trajectory' table
+        self.set_and_move_cmd = False                                                                   # Boolean that lets the 'update_display' function know that the 'set_and_move' function is calling it
+        self.execute_speed_cmd = False                                                                  # Boolean specifying whether the QTimer should move the 'Pan' and 'Tilt' motors when in 'Speed' mode
+        self.convert_speed_to_time = False                                                              # Boolean that is 'False' when in 'Time' mode and 'True' when in 'Speed' mode
+        self.mutex = threading.Lock()                                                                   # Used to prevent multiple functions from accessing 'self.joint_states' at the same time
+        self.joy_mutex = threading.Lock()                                                               # Used to prevent multiple functions from accessing 'self.joy_msg' at the same time
+        self.speed_mutex = threading.Lock()                                                             # Used to prevent multiple functions from accessing 'self.execute_speed_cmd' at the same time
+        self.big_font = QFont("Helvetica", 18, QFont.Bold)                                              # Large font for Header text
+        self.small_font = QFont("Helvetica", 9, QFont.Bold)                                             # Small font for other text
+        self.master_layout = QGridLayout()                                                              # Root container for the GUI
+        self.joint_commands = JointCommands()                                                           # Holds the current 'Pan' and 'Tilt' motor commands
+        self.joint_commands.cmd = [0, 0]
+        rospy.wait_for_service("torque_arm_on")
+        rospy.wait_for_service("torque_arm_off")
+        rospy.wait_for_service("get_robot_info")
+        rospy.wait_for_service("set_motor_register_values")
+        self.srv_torque_on = rospy.ServiceProxy("torque_arm_on", Empty)                                 # ROS Service to torque the turret on
+        self.srv_torque_off = rospy.ServiceProxy("torque_arm_off", Empty)                               # ROS Service to torque the turret off
+        srv_robot_info = rospy.ServiceProxy("get_robot_info", RobotInfo)                                # ROS Service get joint limit information
+        self.srv_motor_registers = rospy.ServiceProxy("set_motor_register_values", RegisterValues)      # ROS Service to set the 'Profile_Velocity' register on the motors
+        self.srv_torque_on()                                                                            # Torque on the turret
+        self.robot_info = srv_robot_info()                                                              # Get the turret joint limits
+        self.pub_cmds = rospy.Publisher("joint/commands", JointCommands, queue_size=100)                # ROS Publisher to publish joint commands
+        self.sub_joy_cmds = rospy.Subscriber("joy/commands", TurretControl, self.joystick_cb)           # ROS Subsciber to get commands from the external joystick controller
+        self.sub_joint_states = rospy.Subscriber("joint_states", JointState, self.joint_state_cb)       # ROS Subscriber to get current joint states
+        self.tmr_speed = rospy.Timer(rospy.Duration(0.01), self.speed_to_time_cb)                       # ROS Timer to convert a 'Speed' value to a 'Time' value and move the motors
+        tmr_main_thread = QTimer(self)                                                                  # PyQt Timer to update the GUI from the main thread when necessary
+        tmr_main_thread.timeout.connect(self.main_thread_timer_cb)
+        tmr_main_thread.start(10)                                                                       # Call the PyQt Timer every 10 milliseconds (100 Hz)
+
+        # wait for the first joint state message
+        while (True):
+            with self.mutex:
+                if (self.joint_states is not None):
+                    break
+            rospy.sleep(0.1)
+
+        # First section - Individual Pan & Tilt Control
+        self.create_single_motor_gui("pan", 0, 0, 0)
+        self.create_single_motor_gui("tilt", 1, 0, 1)
+        self.create_move_center_reset_rest_buttons(2,0)
+        self.create_horz_line(3, 0)
+        self.create_velocity_gui(4, 0)
+
+        # Second section - Joystick (Combined Pan & Tilt) Control
+        self.create_vert_line(0, 1)
+        self.create_joystick_gui(0, 2)
+        self.create_vert_line(0, 3)
+
+        # Third section - Trajectory Control
+        self.create_trajectory_table_gui(0, 4)
+
+        # Display the master layout
+        self.setLayout(self.master_layout)
+        self.show()
+
+
+# ROS Subscribers and Timer
+
+    ### @brief ROS Subscriber callback function to get updated joint states
+    ### @param msg - updated JointState message
+    def joint_state_cb(self, msg):
+        with self.mutex:
+            self.joint_states = msg
+
+    ### @brief ROS Subscriber callback function to get external controller input
+    ### @param msg - a TurretControl type message
+    def joystick_cb(self, msg):
+        with self.joy_mutex:
+            self.joy_msg = msg
+
+    ### @brief ROS Timer used to convert 'speed' values into 'time' values and command the motor registers
+    ### @param event [unused] - ROS event message
+    ### @details - this is done in its own thread since there is a small delay between when the 'move' function is called
+    ###            and when it returns the 'reins' back to the calling function; this ensures a smoother GUI experience
+    def speed_to_time_cb(self, event):
+        with self.speed_mutex:
+            execute_speed_cmd = self.execute_speed_cmd
+        if execute_speed_cmd:
+            self.move()
+        with self.speed_mutex:
+            self.execute_speed_cmd = False
+
+# PyQt Timer
+
+    ### @brief A QTimer used to perform four main functions
+    ### @details - The four main functions are:
+    ###                1) Update the position of the 'red circle' (representing the current turret position) in the joystick widget
+    ###                2) If going to the Rest Position and Torqueing off, the timer waits until the Turret has completed the motion and torques off automatically
+    ###                3) Takes in Turret commands from the external joystick controller and updates the GUI accordingly
+    ###                4) Step through the 'pan' and 'tilt' position commands in the 'Trajectory' table
+    ###          - The reason for using a QTimer instead of a ROS Timer is that in Qt, it is not allowed to directly update widgets from
+    ###            threads other than the one running the main GUI; as such, a QTimer ensures that the callback occurs within the main thread.
+    def main_thread_timer_cb(self):
+        # Updating joystick position...
+        with self.mutex:
+            msg = list(self.joint_states.position)
+        positions = [self.rad2deg(x) for x in msg]
+        self.js_win.setJointStates(positions)
+
+        # Waiting to torque off motors if first going to the rest position...
+        if (self.start_delay == True):
+            if (rospy.get_time() - self.delay_start_time > self.torque_off_delay + .2):
+                self.srv_torque_off()
+                self.torque_label.setText("Torqued Off")
+                self.torque_label.setStyleSheet("QLabel {color : red;}")
+                self.torque_button.setText("Torque On")
+                self.start_delay = False
+                if (self.close_gui):
+                    self.close()
+
+        # Commanding joint positions based on the external joystick controller...
+        if (self.ext_joy_checkbox.isChecked()):
+            with self.joy_mutex:
+                msg = copy.deepcopy(self.joy_msg)
+                self.joy_msg.arm_speed_cmd = 0
+                self.joy_msg.arm_toggle_speed_cmd = 0
+
+            if (msg.arm_speed_cmd == TurretControl.ARM_LOW_SPEED and self.joy_speeds["current"] >= 0.2):
+                self.joy_speeds["current"] -= 0.1
+                self.message_label.setText("Speed at %.1f%% of max value." % ((self.joy_speeds["current"]/3.0)*100))
+            elif (msg.arm_speed_cmd == TurretControl.ARM_HIGH_SPEED and self.joy_speeds["current"] < 3):
+                self.joy_speeds["current"] += 0.1
+                self.message_label.setText("Speed at %.1f%% of max value." % ((self.joy_speeds["current"]/3.0)*100))
+
+            if (msg.arm_toggle_speed_cmd == TurretControl.ARM_COURSE_SPEED):
+                self.joy_speeds["fine"] = self.joy_speeds["current"]
+                self.joy_speeds["current"] = self.joy_speeds["course"]
+                self.message_label.setText("Switching to course speed control (set to %.1f%% of max value.)" % ((self.joy_speeds["current"]/3.0)*100))
+            elif (msg.arm_toggle_speed_cmd == TurretControl.ARM_FINE_SPEED):
+                self.joy_speeds["course"] = self.joy_speeds["current"]
+                self.joy_speeds["current"] = self.joy_speeds["fine"]
+                self.message_label.setText("Switching to fine speed control (set to %.1f%% of max value.)" % ((self.joy_speeds["current"]/3.0)*100))
+
+            pan_cmd = float(self.name_map["pan"]["display"].text())
+            pan_min = float(self.name_map["pan"]["lower_limit"].text())
+            pan_max = float(self.name_map["pan"]["upper_limit"].text())
+            tilt_cmd = float(self.name_map["tilt"]["display"].text())
+            tilt_min = float(self.name_map["tilt"]["lower_limit"].text())
+            tilt_max = float(self.name_map["tilt"]["upper_limit"].text())
+
+            if (msg.pan_cmd == TurretControl.PAN_CCW):
+                if ((pan_cmd + self.joy_speeds["current"]) < pan_max):
+                    pan_cmd += self.joy_speeds["current"]
+                else:
+                    pan_cmd = pan_max
+            elif (msg.pan_cmd == TurretControl.PAN_CW):
+                if ((pan_cmd - self.joy_speeds["current"]) > pan_min):
+                    pan_cmd -= self.joy_speeds["current"]
+                else:
+                    pan_cmd = pan_min
+
+            if (msg.tilt_cmd == TurretControl.TILT_CCW):
+                if ((tilt_cmd + self.joy_speeds["current"]) < tilt_max):
+                    tilt_cmd += self.joy_speeds["current"]
+                else:
+                    tilt_cmd = tilt_max
+            elif (msg.tilt_cmd == TurretControl.TILT_CW):
+                if ((tilt_cmd - self.joy_speeds["current"]) > tilt_min):
+                    tilt_cmd -= self.joy_speeds["current"]
+                else:
+                    tilt_cmd = tilt_min
+
+            if (msg.robot_pose == TurretControl.HOME_POSE):
+                pan_cmd = self.rest_pos[0]
+                tilt_cmd = self.rest_pos[1]
+
+            if (pan_cmd != float(self.name_map["pan"]["display"].text())):
+                self.name_map["pan"]["display"].setText("%.1f" % pan_cmd)
+                self.update_slider_bar("pan")
+            if (tilt_cmd != float(self.name_map["tilt"]["display"].text())):
+                self.name_map["tilt"]["display"].setText("%.1f" % tilt_cmd)
+                self.update_slider_bar("tilt")
+
+        # Stepping through the 'Trajectory' table...
+        if (self.start_trajectory == True):
+            time_from_start = rospy.get_time() - self.start_traj_time
+            # do not start executing the next row of the table until the right time
+            if (time_from_start >= self.traj_list[self.traj_index]["time_from_start"]):
+                # if the end of the table has been reached...
+                if (self.traj_index + 1 == len(self.traj_list)):
+                    self.traj_index = 0
+                    # if the 'loop' checkbox is selected, then play it again
+                    if (self.loop_checkbox.isChecked()):
+                        self.start_traj_time = rospy.get_time()
+                    else:
+                        self.start_trajectory = False
+                        self.update_velocity()
+                    return
+                # print message displaying the current row being executed
+                self.message_label.setText("Now on row #%d." % (self.traj_index + 1))
+                row_info = self.traj_list[self.traj_index]
+                # command the motor registers with the right 'time' value; if in 'velocity' mode, convert to the appropiate 'time' value
+                moving_time = self.velocity2time(row_info["speed"], row_info["speed_type"], row_info["pan"], row_info["tilt"])
+                self.joint_commands.cmd = [row_info["pan"], row_info["tilt"]]
+                self.pub_cmds.publish(self.joint_commands)
+                self.traj_index += 1
+                # update the next time_from_start field based on the 'moving' time and the 'post-move-delay' of the current row and the 'time_from_start' from the previous row
+                self.traj_list[self.traj_index]["time_from_start"] = (moving_time + row_info["delay"]) / 1000.0 + row_info["time_from_start"]
+
+# Helper functions to build individual sections of the main GUI
+
+    ### @brief Creates the GUI subsection for the 'Pan' and 'Tilt' motors
+    ### @param motor_name - either 'Pan' or 'Tilt'
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    ### @param joint - joint number where '0' is for the pan motor and '1' is for the tilt motor
+    def create_single_motor_gui(self, motor_name, row, col, joint):
+        # parent container for this section
+        grid_layout = QGridLayout()
+
+        # first row
+        label = self.create_label(motor_name.capitalize(), self.big_font)
+        min_label = self.create_label("Min", self.small_font)
+        max_label = self.create_label("Max", self.small_font)
+        grid_layout.addWidget(min_label, 0, 0, Qt.AlignBottom | Qt.AlignCenter)
+        grid_layout.addWidget(label, 0, 1, Qt.AlignCenter)
+        grid_layout.addWidget(max_label, 0, 2, Qt.AlignBottom | Qt.AlignCenter)
+
+        # second row
+        slider = self.create_slider()
+        lower_lim = self.rad2deg(self.robot_info.lower_joint_limits[joint])
+        upper_lim = self.rad2deg(self.robot_info.upper_joint_limits[joint])
+        lower_limit = self.create_textbox("%.1f" % lower_lim)
+        upper_limit = self.create_textbox("%.1f" % upper_lim)
+        grid_layout.addWidget(lower_limit, 1, 0, Qt.AlignCenter)
+        grid_layout.addWidget(slider, 1, 1, Qt.AlignCenter)
+        grid_layout.addWidget(upper_limit, 1, 2, Qt.AlignCenter)
+
+        # third row
+        checkbox = self.create_checkbox("Realtime")
+        display = self.create_textbox("%0.1f" % self.rad2deg(self.joint_states.position[joint]))
+        grid_layout.addWidget(display, 2, 1, Qt.AlignCenter)
+        grid_layout.addWidget(checkbox, 2, 1, Qt.AlignRight)
+
+        # signals
+        lower_limit.editingFinished.connect(lambda:self.update_lower_limit(motor_name))
+        upper_limit.editingFinished.connect(lambda:self.update_upper_limit(motor_name))
+        display.editingFinished.connect(lambda:self.update_slider_bar(motor_name))
+        slider.valueChanged.connect(lambda:self.update_display(motor_name))
+        checkbox.stateChanged.connect(self.update_move_button_state)
+
+        # global dictionary to store and retrieve values
+        self.name_map[motor_name] = {'display' : display, 'slider' : slider, 'lower_limit' : lower_limit, 'upper_limit' : upper_limit, 'min_lower_limit' : lower_lim, 'max_upper_limit' : upper_lim, 'checkbox' : checkbox, 'joint' : joint}
+
+        # move the slider to the motor's current position
+        self.update_slider_bar(motor_name)
+
+        # add the layout to the master layout
+        self.master_layout.addLayout(grid_layout, row, col)
+
+    ### @brief Creates the GUI subsection containing the 'move', 'center', 'reset limits', and 'rest' buttons
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_move_center_reset_rest_buttons(self, row, col):
+        # parent container for this section
+        horizontal_layout = QHBoxLayout()
+
+        # first and only row
+        rest_button = self.create_button('Set Rest Position', self.small_font, True)
+        reset_button = self.create_button('Reset Limits', self.small_font, True)
+        center_button = self.create_button('Center', self.small_font, True)
+        self.move_button = self.create_button('Move', self.small_font, False)
+
+        horizontal_layout.addStretch()
+        horizontal_layout.addWidget(rest_button)
+        horizontal_layout.addStretch()
+        horizontal_layout.addWidget(reset_button)
+        horizontal_layout.addStretch()
+        horizontal_layout.addWidget(center_button)
+        horizontal_layout.addStretch()
+        horizontal_layout.addWidget(self.move_button)
+        horizontal_layout.addStretch()
+
+        # signals
+        rest_button.clicked.connect(self.rest_position)
+        reset_button.clicked.connect(self.reset_limits)
+        center_button.clicked.connect(lambda:self.set_and_move(0,0))
+        self.move_button.clicked.connect(self.move)
+
+        # add layout to master layout
+        self.master_layout.addLayout(horizontal_layout, row, col)
+
+    ### @brief Creates the GUI subsection containing the 'Time/Speed' adjuster
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_velocity_gui(self, row, col):
+        # parent container for this section
+        grid_layout = QGridLayout()
+
+        # first row
+        label = self.create_label("Time", self.big_font)
+        min_label = self.create_label("Min", self.small_font)
+        max_label = self.create_label("Max", self.small_font)
+        grid_layout.addWidget(min_label, 0, 0, Qt.AlignBottom | Qt.AlignCenter)
+        grid_layout.addWidget(label, 0, 1, 1, 4,Qt.AlignCenter)
+        grid_layout.addWidget(max_label, 0, 5, Qt.AlignBottom | Qt.AlignCenter)
+
+        # second row
+        lower_lim = 0
+        upper_lim = 32000
+        slider = self.create_slider()
+        lower_limit = self.create_textbox("%d" % lower_lim)
+        upper_limit = self.create_textbox("%d" % upper_lim)
+        grid_layout.addWidget(lower_limit, 1, 0, Qt.AlignCenter)
+        grid_layout.addWidget(slider, 1, 1, 1, 4, Qt.AlignCenter)
+        grid_layout.addWidget(upper_limit, 1, 5, Qt.AlignCenter)
+
+        # third row
+        display = self.create_textbox("2000")
+        time_button = QRadioButton("Time [ms/move]")
+        time_button.setFont(self.small_font)
+        time_button.setChecked(True)
+        self.torque_button = self.create_button("Torque Off", self.small_font, True)
+        grid_layout.addWidget(display, 2, 1, 1, 4, Qt.AlignCenter)
+        grid_layout.addWidget(time_button, 2, 1, Qt.AlignLeft | Qt.AlignBottom)
+        grid_layout.addWidget(self.torque_button, 2, 4, Qt.AlignCenter)
+
+        # fourth row
+        speed_button = QRadioButton("Speed [deg/s]")
+        speed_button.setFont(self.small_font)
+        self.ext_joy_checkbox = self.create_checkbox("External Joystick")
+        self.torque_label = self.create_label("Torqued On", self.small_font)
+        self.torque_label.setStyleSheet("QLabel {color : green;}")
+        grid_layout.addWidget(speed_button, 3, 1, Qt.AlignLeft | Qt.AlignTop)
+        grid_layout.addWidget(self.ext_joy_checkbox, 3, 2, 1, 2, Qt.AlignCenter)
+        grid_layout.addWidget(self.torque_label, 3, 4, Qt.AlignCenter)
+
+        # signals
+        lower_limit.editingFinished.connect(lambda:self.update_lower_limit("velocity"))
+        upper_limit.editingFinished.connect(lambda:self.update_upper_limit("velocity"))
+        display.editingFinished.connect(lambda:self.update_slider_bar("velocity"))
+        display.editingFinished.connect(self.update_velocity)
+        slider.sliderReleased.connect(self.update_velocity)
+        slider.valueChanged.connect(lambda:self.update_display("velocity"))
+        self.torque_button.clicked.connect(self.torque_change)
+        speed_button.toggled.connect(self.change_velocity_units)
+        self.ext_joy_checkbox.stateChanged.connect(self.external_joystick_mode)
+
+        # global dictionary to store and retrieve values
+        self.name_map["time"] = {'display' : display.text(), 'lower_limit' : lower_limit.text(), 'upper_limit' : upper_limit.text(), 'min_lower_limit' : lower_lim, 'max_upper_limit' : upper_lim}
+        self.name_map["speed"] = {'display' : "60.0", 'lower_limit' : "12.0", 'upper_limit' : "180.0", 'min_lower_limit' : 12.0, 'max_upper_limit' : 180.0}
+        self.name_map["velocity"] = {'display' : display, 'slider' : slider, 'lower_limit' : lower_limit, 'upper_limit' : upper_limit, 'min_lower_limit' : lower_lim, 'max_upper_limit' : upper_lim, 'time_button' : time_button, 'speed_button' : speed_button, "label" : label}
+
+        # disable velocity control since the 'External Joystick' checkbox is checked by default
+        self.external_joystick_mode()
+
+        # move the slider to the default 'time'
+        self.update_slider_bar("velocity")
+
+        # set the motor registers to the default 'time'
+        self.update_velocity()
+
+        # add the layout to the master layout
+        self.master_layout.addLayout(grid_layout, row, col)
+
+    ### @brief Creates the GUI subsection containing the mouse-controlled 'Joystick'
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_joystick_gui(self, row, col):
+        # parent container for this section
+        joystick_layout = QGridLayout()
+
+        # first row
+        label = self.create_label("Joystick Control", self.big_font)
+        joystick_layout.addWidget(label, 0, 1, Qt.AlignCenter)
+
+        # second row - first column
+        vert_axis = QGridLayout()
+        tilt_min_label = self.create_label("%.1f" % self.name_map["tilt"]["min_lower_limit"], self.small_font)
+        tilt_max_label = self.create_label("%.1f" % self.name_map["tilt"]["max_upper_limit"], self.small_font)
+        tilt_label = self.create_label("T\ni\nl\nt", self.small_font)
+        tilt_label.setAlignment(Qt.AlignCenter)
+        vert_axis.addWidget(tilt_max_label, 0, 0, Qt.AlignTop | Qt.AlignCenter)
+        vert_axis.addWidget(tilt_label, 1, 0, Qt.AlignCenter)
+        vert_axis.addWidget(tilt_min_label, 2, 0, Qt.AlignBottom | Qt.AlignCenter)
+        joystick_layout.addLayout(vert_axis, 1, 0)
+
+        # second row - second column
+        self.js_win = JoystickButton(self)
+        joystick_layout.addWidget(self.js_win, 1, 1)
+
+        # third row
+        horz_axis = QGridLayout()
+        pan_min_label = self.create_label("%.1f" % self.name_map["pan"]["min_lower_limit"], self.small_font)
+        pan_max_label = self.create_label("%.1f" % self.name_map["pan"]["max_upper_limit"], self.small_font)
+        pan_label = self.create_label("Pan", self.small_font)
+        horz_axis.addWidget(pan_min_label, 0, 0, Qt.AlignLeft)
+        horz_axis.addWidget(pan_label, 0, 1, Qt.AlignCenter)
+        horz_axis.addWidget(pan_max_label, 0, 2, Qt.AlignRight)
+        joystick_layout.addLayout(horz_axis, 2, 1)
+
+        # add layout to master layout
+        self.master_layout.addLayout(joystick_layout, row, col, 5, 1)
+
+    ### @brief Creates the GUI subsection containing the 'Trajectory' table
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_trajectory_table_gui(self, row, col):
+        # parent container for this section
+        vertical_layout = QVBoxLayout()
+
+        # first row
+        label = self.create_label("Preset Positions", self.big_font)
+        label.setAlignment(Qt.AlignCenter)
+        vertical_layout.addWidget(label)
+
+        # second row
+        header_labels = ['Pan [deg]', 'Tilt [deg]', 'Velocity Type', 'Velocity', 'Delay [ms]']
+        self.tbl = QTableWidget(0, 5)
+        self.tbl.setColumnWidth(2, 120)
+        self.tbl.setHorizontalHeaderLabels(header_labels)
+        self.tbl.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tbl.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        tbl_width = self.tbl.verticalHeader().width()
+        tbl_width += self.tbl.horizontalHeader().length()
+        tbl_width += self.tbl.frameWidth() * 2
+        # still need some padding to get table to show up with the correct width
+        self.tbl.setFixedWidth(tbl_width + 30)
+        # add two rows by default
+        self.add_table_row()
+        self.add_table_row()
+        # set the current cell to (0,0) by default
+        self.tbl.setCurrentCell(0, 0)
+        vertical_layout.addWidget(self.tbl)
+
+        # third row
+        horz_layout_1 = QHBoxLayout()
+        self.insert_button = self.create_button("Insert Row", self.small_font, True)
+        self.delete_button = self.create_button("Delete Row", self.small_font, True)
+        play_row_button = self.create_button("Play Row", self.small_font, True)
+        load_button = self.create_button("Load", self.small_font, True)
+        self.play_button = self.create_button("Play All", self.small_font, True)
+        save_button = self.create_button("Save", self.small_font, True)
+        horz_layout_1.addStretch()
+        horz_layout_1.addWidget(self.insert_button)
+        horz_layout_1.addWidget(self.delete_button)
+        horz_layout_1.addWidget(play_row_button)
+        horz_layout_1.addWidget(load_button)
+        horz_layout_1.addWidget(self.play_button)
+        horz_layout_1.addWidget(save_button)
+        horz_layout_1.addStretch()
+        vertical_layout.addLayout(horz_layout_1)
+
+        # fourth row
+        horz_layout_2 = QHBoxLayout()
+        welcome_text = "Welcome to the Interbotix Turret Controller!"
+        self.message_label = self.create_label(welcome_text, self.small_font)
+        stop_button = self.create_button("Stop", self.small_font, True)
+        self.loop_checkbox = self.create_checkbox("Loop")
+        horz_layout_2.addWidget(self.message_label)
+        horz_layout_2.addStretch()
+        horz_layout_2.addWidget(stop_button)
+        horz_layout_2.addWidget(self.loop_checkbox)
+        vertical_layout.addLayout(horz_layout_2)
+
+        # signals
+        self.insert_button.clicked.connect(self.insert_table_row)
+        self.delete_button.clicked.connect(self.delete_table_row)
+        play_row_button.clicked.connect(self.play_row)
+        load_button.clicked.connect(self.load_trajectory)
+        self.play_button.clicked.connect(self.play_trajectory)
+        save_button.clicked.connect(self.save_trajectory)
+        self.tbl.cellChanged.connect(self.cell_changed)
+        stop_button.clicked.connect(self.stop_trajectory)
+
+        # add 'stretch' to position table at the top and allow it to expand downwards
+        vertical_layout.addStretch()
+        # add layout to master layout
+        self.master_layout.addLayout(vertical_layout, row, col, 5, 1)
+
+    ### @brief Creates a horizontal line to act as a section divider
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_horz_line(self, row, col):
+        horz_line = QLabel()
+        horz_line.setFixedWidth(500)
+        horz_line.setFrameStyle(QFrame.HLine)
+        horz_line.setLineWidth(2)
+        self.master_layout.addWidget(horz_line, row, col, Qt.AlignCenter)
+
+    ### @brief Creates a vertical line to act as a section divider
+    ### @param row - row placement of the GUI subsection in the master grid layout
+    ### @param col - column placement of the GUI subsection in the master grid layout
+    def create_vert_line(self, row, col):
+        vert_line = QLabel()
+        vert_line.setFixedHeight(400)
+        vert_line.setFrameStyle(QFrame.VLine)
+        vert_line.setLineWidth(2)
+        self.master_layout.addWidget(vert_line, row, col, 5, 1, Qt.AlignCenter)
+
+
+# Helper functions to build small GUI componenets
+
+    ### @brief Create a QLabel with some custom settings
+    ### @param text - message that the label should display
+    ### @param font - type of font to use
+    ### @param label [out] - returns QLabel object
+    def create_label(self, text, font):
+        label = QLabel(text)
+        label.setFont(font)
+        return label
+
+    ### @brief Create a QPushButton with some custom settings
+    ### @param text - message that the button should display
+    ### @param font - type of font to use
+    ### @param button [out] - returns QPushButton object
+    def create_button(self, text, font, isEnabled):
+        button = QPushButton(text)
+        button.setFont(font)
+        button.setEnabled(isEnabled)
+        return button
+
+    ### @brief Creates a QLineEdit box with some custom settings
+    ### @param text - text that should be displayed
+    ### @param textbox [out] - returns QLineEdit object
+    def create_textbox(self, text):
+        textbox = QLineEdit(text)
+        textbox.setFont(self.small_font)
+        textbox.setFixedWidth(50)
+        textbox.setAlignment(Qt.AlignCenter)
+        return textbox
+
+    ### @brief Creates a QSlider with some custom settings
+    ### @param slider [out] - returns QSlider object
+    def create_slider(self):
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(0, RANGE)
+        slider.setValue(RANGE/2)
+        slider.setFixedWidth(450)
+        return slider
+
+    ### @brief Creates a QCheckBox with some custom settings
+    ### @param text - text that should be displayed
+    ### @param checkbox [out] - returns QCheckBox object
+    def create_checkbox(self, text):
+        checkbox = QCheckBox(text)
+        checkbox.setFont(self.small_font)
+        checkbox.setChecked(True)
+        return checkbox
+
+
+# Helper functions to convert units
+
+    ### @brief Helper function to convert radians to degrees
+    ### @param rad - value in radians to convert to degrees
+    def rad2deg(self, rad):
+        return (180/math.pi) * rad
+
+    ### @brief Helper function to convert degrees to radians
+    ### @param rad - value in degrees to convert to radians
+    def deg2rad(self, deg):
+        rad = (math.pi/180) * deg
+        # this essentially trims the number to the decimal place shown below without rounding; this is neccessary since
+        # commanding a 'boundary limit' (like 180 deg for the pan motor) will not work otherwise - it seems that the value
+        # is slightly too large by like 0.00001 and will be ignored.
+        return rad - (rad % 0.0001)
+
+    ### @brief Helper function to set the 'Profile_Velocity' register with the correct 'time' value, converting from speed to time if neccessary
+    ### @param velocity - either a 'Time' or 'Speed' value where time is in [ms] and speed is in [deg/s]
+    ### @param velocity_type - a string containing either 'Time [ms/move]' or 'Speed [deg/s]'
+    ### @param pan_desired - desired Pan position in radians
+    ### @param tilt_desired - desired Tilt position in radians
+    ### @param <int> [out] - returns 'velocity' if in 'Time' mode, otherwise the larger of the two 'pan' and 'tilt' times if in 'Velocity' mode
+    ### @details - the integer returned is useful when calculating the delay between two trajectory points
+    def velocity2time(self, velocity, velocity_type="Time [ms/move]", pan_desired=0, tilt_desired=0):
+        if (velocity_type == "Time [ms/move]"):
+            resp = self.srv_motor_registers(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=int(velocity))
+            return velocity
+        else:
+            # get current position of pan and tilt motors
+            with self.mutex:
+                positions = list(self.joint_states.position)
+            pan_time = int(abs(pan_desired - positions[0]) / self.deg2rad(velocity) * 1000)
+            tilt_time = int(abs(tilt_desired - positions[1]) / self.deg2rad(velocity) * 1000)
+            pan_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=1, addr_name="Profile_Velocity", value=pan_time)
+            tilt_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=2, addr_name="Profile_Velocity", value=tilt_time)
+            return max(pan_time, tilt_time)
+
+# Helper functions to manage the 'Trajectory' table
+
+    ### @brief Helper function that checks if the data in a specified cell (from the 'Trajectory' table is valid)
+    ### @param data - the floating-point number currently living at the cell specified by 'row' and 'col'
+    ### @param row - the table row of the cell to check
+    ### @param col - the table column of the cell to check
+    def check_data(self, data, row, col):
+        if (col == 0 and (data < self.name_map["pan"]["min_lower_limit"] or data > self.name_map["pan"]["max_upper_limit"])):
+            self.message_label.setText("Please enter a floating-point number between %.1f and %.1f." % (self.name_map["pan"]["min_lower_limit"], self.name_map["pan"]["max_upper_limit"]))
+            return False
+        elif (col == 1 and (data < self.name_map["tilt"]["min_lower_limit"] or data > self.name_map["tilt"]["max_upper_limit"])):
+            self.message_label.setText("Please enter a floating-point number between %.1f and %.1f." % (self.name_map["tilt"]["min_lower_limit"], self.name_map["tilt"]["max_upper_limit"]))
+            return False
+        elif (col == 3):
+            speed_type = self.tbl.cellWidget(row, 2).currentText()
+            if (speed_type == "Time [ms/move]" and (data < self.name_map["time"]["min_lower_limit"] or data > self.name_map["time"]["max_upper_limit"])):
+                self.message_label.setText("Please enter an integer between %d and %d." % (self.name_map["time"]["min_lower_limit"], self.name_map["time"]["max_upper_limit"]))
+                return False
+            elif (speed_type == "Speed [deg/s]" and (data < self.name_map["speed"]["min_lower_limit"] or data > self.name_map["speed"]["max_upper_limit"])):
+                self.message_label.setText("Please enter a floating-point number between %.1f and %.1f." % (self.name_map["speed"]["min_lower_limit"], self.name_map["speed"]["max_upper_limit"]))
+                return False
+        elif (col == 4 and data < 0):
+            self.message_label.setText("Please enter a number equal to or greater than 0.")
+            return False
+        return True
+
+    ### @brief Helper function that iterates through all the cells in the 'Trajectory' table and makes sure they are valid
+    ### @param <boolean> [out] - returns True if the data is valid, otherwise False
+    ### @details - the function checks that each cell is not blank and that none of them are shaded red; it is used right
+    ###            before playing and saving a trajectory
+    def check_table(self):
+        num_rows = self.tbl.rowCount()
+        num_cols = self.tbl.columnCount()
+        for row in range(num_rows):
+            for col in range(num_cols):
+                if (col != 2):
+                    it = self.tbl.item(row, col)
+                    if not (it and it.text()):
+                        self.message_label.setText("Please fill in or delete the empty rows.")
+                        return False
+                    if (it.background() != QBrush(QColor(255,255,255))):
+                        self.message_label.setText("Please enter correct values in the red-shaded cells.")
+                        return False
+        return True
+
+    ### @brief Helper function that iterates over the data in a specific row of the 'Trajectory' table to make sure it is valid
+    ### @param row - the table row to check
+    ### @param <boolean> [out] - returns True if the data is valid, otherwise False
+    ### @details - only the data in columns 0, 1, and 3 in the table are checked
+    def check_table_row(self, row):
+        num_cols = self.tbl.columnCount()
+        for col in range(num_cols):
+            if (col != 2 and col != 4):
+                it = self.tbl.item(row, col)
+                if not (it and it.text()):
+                    self.message_label.setText("Please fill in or delete the empty cells.")
+                    return False
+                if (it.background() != QBrush(QColor(255,255,255))):
+                    self.message_label.setText("Please enter correct values in the red-shaded cells.")
+                    return False
+        return True
+
+    ### @brief Helper function to add a row to the bottom of the 'Trajectory' table
+    ### @details - it is used when loading a saved trajectory and in the initial construction of the table
+    def add_table_row(self):
+        num_rows = self.tbl.rowCount()
+        self.tbl.insertRow(num_rows)
+        combo = QComboBox()
+        combo.addItems(['Time [ms/move]', 'Speed [deg/s]'])
+        combo.setFont(self.small_font)
+        self.tbl.setCellWidget(num_rows, 2, combo)
+        if (num_rows < 10):
+            self.tbl.setFixedHeight(self.tbl.horizontalHeader().height() + self.tbl.rowHeight(0) * (num_rows+1))
+
+
+# 'Trajectory' table cell callback
+
+    ### @brief Event handler when a cell in the 'Trajectory' table has been changed
+    ### @param row - the table row of the changed cell
+    ### @param col - the table column of the changed cell
+    ### @details - if the cell is blank, don't do anything; if there is data in the cell,
+    ###            check to make sure that it is valid; if it's not, highlight the cell in red
+    def cell_changed(self, row, col):
+        self.message_label.setText("")
+        if (col == 2):
+            return
+        it = self.tbl.item(row, col)
+        if (it and it.text()):
+            try:
+                data = float(it.text())
+                passed = self.check_data(data, row, col)
+                if (passed):
+                    # set cell to the normal white background
+                    it.setBackground(QBrush(QColor(255,255,255)))
+                else:
+                    # set cell to a pink background
+                    it.setBackground(QBrush(QColor(255,128,128)))
+            except ValueError:
+                # set cell to a pink background
+                it.setBackground(QBrush(QColor(255,128,128)))
+                self.message_label.setText("Please only enter numbers.")
+                return
+        else:
+            # if user typed bad input and then cleared the cell, restore to a white background
+            it.setBackground(QBrush(QColor(255,255,255)))
+
+
+# Button callbacks
+
+    ### @brief Event handler when the 'Set Rest Position' button is pressed
+    ### @details - sets the position the turret should go to at program exit
+    def rest_position(self):
+        pan_pos = float(self.name_map["pan"]["display"].text())
+        tilt_pos = float(self.name_map["tilt"]["display"].text())
+        self.rest_pos = [pan_pos, tilt_pos]
+        self.message_label.setText("Rest position set to Pan: %.1f [deg] and Tilt: %.1f [deg]." % (pan_pos, tilt_pos))
+
+    ### @brief Event handler when the 'Reset Limits' button is pressed
+    ### @details - resets the limits for the 'Pan' and 'Tilt' motors to their default values
+    def reset_limits(self):
+        self.name_map["pan"]["lower_limit"].setText("%.1f" % self.name_map["pan"]["min_lower_limit"])
+        self.name_map["pan"]["upper_limit"].setText("%.1f" % self.name_map["pan"]["max_upper_limit"])
+        self.name_map["tilt"]["lower_limit"].setText("%.1f" % self.name_map["tilt"]["min_lower_limit"])
+        self.name_map["tilt"]["upper_limit"].setText("%.1f" % self.name_map["tilt"]["max_upper_limit"])
+        self.message_label.setText("Pan and Tilt limits were reset to their default values.")
+        self.update_lower_limit("pan")
+        self.update_upper_limit("pan")
+        self.update_slider_bar("pan")
+        self.update_lower_limit("tilt")
+        self.update_upper_limit("tilt")
+        self.update_slider_bar("tilt")
+
+    ### @brief Event handler when the 'Center' button is pressed
+    ### @param pan - desired pan position [deg]
+    ### @param tilt - desired tilt position [deg]
+    ### @param moving_time [out] - max time [ms] it should take for the motors to complete the move
+    ### @details - sets both the 'tilt' and 'pan' motors to '0' degrees; it's also
+    ###            used to command the motors to the rest position
+    def set_and_move(self, pan, tilt):
+        self.name_map["pan"]["display"].setText("%.1f" % pan)
+        self.name_map["tilt"]["display"].setText("%.1f" % tilt)
+        self.set_and_move_cmd = True
+        self.update_slider_bar("pan")
+        self.update_slider_bar("tilt")
+        self.set_and_move_cmd = False
+        moving_time = self.move()
+        return moving_time
+
+    ### @brief Event handler when the 'Move' button is pressed
+    ### @param velocity [out] - max time [ms] it should take for the motors to complete the move
+    ### @details - moves the 'pan' and 'tilt' motors based on the displayed values;
+    ###            if in 'velocity' mode, the velocity is converted to an equivalent 'time'
+    ###            before the motion is executed
+    def move(self):
+        velocity = float(self.name_map["velocity"]["display"].text())
+        # if in 'velocity' mode, convert to the appropiate 'time' value
+        if (self.convert_speed_to_time):
+            # get desired positions of pan and tilt motors
+            pan_desired = self.deg2rad(float(self.name_map["pan"]["display"].text()))
+            tilt_desired = self.deg2rad(float(self.name_map["tilt"]["display"].text()))
+            velocity = self.velocity2time(velocity, "Speed [deg/s]", pan_desired, tilt_desired)
+        self.pub_cmds.publish(self.joint_commands)
+        return velocity
+
+    ### @brief Event handler when the 'Torque On/Off' button is pressed
+    ### @details - opens a Warning QMessageBox when torqueing off motors
+    def torque_change(self):
+        if (self.torque_label.text() == "Torqued On"):
+            warning_title_text = "<h3>You are about to torque off the Turret...</h3>"
+            warning_info_text = "Are you sure you want to continue torqueing off the motors? This could cause the turret to <b>suddenly lose its position</b>, potentially damaging any onboard equipment."
+            self.torque_off_window(warning_title_text, warning_info_text)
+
+        else:
+            self.torque_label.setText("Torqued On")
+            self.torque_label.setStyleSheet("QLabel {color : green;}")
+            self.torque_button.setText("Torque Off")
+            self.srv_torque_on()
+
+    ### @brief Event handler when the 'Insert Row' button is pressed
+    ### @details - inserts a new row below the currently selected one in the 'Trajectory' table
+    def insert_table_row(self):
+        next_row = self.tbl.currentRow() + 1
+        self.tbl.insertRow(next_row)
+        combo = QComboBox()
+        combo.addItems(['Time [ms/move]', 'Speed [deg/s]'])
+        combo.setFont(self.small_font)
+        self.tbl.setCellWidget(next_row, 2, combo)
+        num_rows = self.tbl.rowCount()
+        if (num_rows < 10):
+            self.tbl.setFixedHeight(self.tbl.horizontalHeader().height() + self.tbl.rowHeight(0) * num_rows)
+
+    ### @brief Event handler when the 'Delete Row' button is pressed
+    ### @details - deletes the currently selected row in the 'Trajectory' table
+    def delete_table_row(self):
+        self.tbl.removeRow(self.tbl.currentRow())
+        num_rows = self.tbl.rowCount()
+        if (num_rows < 10):
+            self.tbl.setFixedHeight(self.tbl.horizontalHeader().height() + self.tbl.rowHeight(0) * num_rows)
+
+    ### @brief Event handler when the 'Play Row' button is pressed
+    ### @details - commands the positions in the currently selected row of the 'Trajectory' table
+    ###            to the motors at the specified time/velocity (the 'delay' field is ignored)
+    def play_row(self):
+        x = self.tbl.currentRow()
+        passed = self.check_table_row(x)
+        if not passed:
+            return
+        self.message_label.setText("Playing row #%d." % (x+1))
+        row_info = {}
+        row_info["pan"] = self.deg2rad(float(self.tbl.item(x, 0).text()))
+        row_info["tilt"] = self.deg2rad(float(self.tbl.item(x, 1).text()))
+        row_info["speed_type"] = self.tbl.cellWidget(x, 2).currentText()
+        row_info["speed"] = float(self.tbl.item(x, 3).text())
+        self.velocity2time(row_info["speed"], row_info["speed_type"], row_info["pan"], row_info["tilt"])
+        self.joint_commands.cmd = [row_info["pan"], row_info["tilt"]]
+        self.pub_cmds.publish(self.joint_commands)
+        self.update_velocity()
+
+    ### @brief Event handler when the 'Load' button is pressed
+    ### @details - loads a user-specified CSV file containing a sequence of motor positions
+    def load_trajectory(self):
+        fname = QFileDialog.getOpenFileName(self, 'Open file', expanduser("~"), "CSV files (*.csv)")
+        if (fname[0] == ""):
+            return
+        num_rows = self.tbl.rowCount()
+        with open(fname[0]) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=",")
+            row_num = 0
+            for row in csv_reader:
+                if (row_num != 0):
+                    if (row_num > num_rows):
+                        self.add_table_row()
+                    self.tbl.setItem(row_num-1, 0, QTableWidgetItem(row[0]))
+                    self.tbl.setItem(row_num-1, 1, QTableWidgetItem(row[1]))
+                    if (row[2] == 'Time [ms/move]'):
+                        self.tbl.cellWidget(row_num-1, 2).setCurrentIndex(0)
+                    else:
+                        self.tbl.cellWidget(row_num-1, 2).setCurrentIndex(1)
+                    self.tbl.setItem(row_num-1, 3, QTableWidgetItem(row[3]))
+                    self.tbl.setItem(row_num-1, 4, QTableWidgetItem(row[4]))
+                row_num += 1
+
+    ### @brief Event handler when the 'Play All' button is pressed
+    ### @details - allows the QTimer to command the motor positions in each row of the 'Trajectory' table sequentially
+    def play_trajectory(self):
+        passed = self.check_table()
+        if not passed:
+            return
+        num_rows = self.tbl.rowCount()
+        if (num_rows == 0):
+            return
+        self.traj_list = []
+        for x in range(num_rows):
+            traj_row = {}
+            traj_row["pan"] = self.deg2rad(float(self.tbl.item(x, 0).text()))
+            traj_row["tilt"] = self.deg2rad(float(self.tbl.item(x, 1).text()))
+            traj_row["speed_type"] = self.tbl.cellWidget(x, 2).currentText()
+            traj_row["speed"] = float(self.tbl.item(x, 3).text())
+            traj_row["delay"] = float(self.tbl.item(x, 4).text())
+            self.traj_list.append(traj_row)
+        # need this to account for any delay in last traj row
+        traj_row = {"time_from_start" : 0}
+        self.traj_list.append(traj_row)
+        self.traj_list[0]["time_from_start"] = 0
+        self.start_traj_time = rospy.get_time()
+        self.traj_index = 0
+        self.start_trajectory = True
+
+    ### @brief Event handler when the 'Save' button is pressed
+    ### @details - saves the data in the 'Trajectory' table to a user-specified CSV file
+    def save_trajectory(self):
+        passed = self.check_table()
+        if not passed:
+            return
+        fname = QFileDialog.getSaveFileName(self, 'Save file', expanduser("~"), "CSV files (*.csv)")
+        if (fname[0] == ""):
+            return
+        with open (fname[0], mode="w") as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=",")
+            num_rows = self.tbl.rowCount()
+            csv_writer.writerow(['Pan [deg]', 'Tilt [deg]', 'Velocity Type', 'Velocity', 'Delay [ms]'])
+            for x in range(num_rows):
+                csv_writer.writerow([self.tbl.item(x, 0).text(), self.tbl.item(x, 1).text(), self.tbl.cellWidget(x, 2).currentText(),
+                                     self.tbl.item(x, 3).text(), self.tbl.item(x, 4).text()])
+
+    ### @brief Event handler when the 'Stop' button is pressed
+    ### @details - stops commanding motor positions from the 'Trajectory' table; note that the last
+    ###            commanded motor positions will still finish executing
+    def stop_trajectory(self):
+        self.start_trajectory = False
+        self.message_label.setText("Trajectory Stopped.")
+        self.update_velocity()
+
+
+# Radio button callback
+
+    ### @brief Event handler when either the 'Time' or 'Speed' button is selected
+    ### @details - stores the current velocity settings, and then displays the settings for the other 'velocity' mode
+    def change_velocity_units(self):
+        info = self.name_map["velocity"]
+        stored_info = {}
+        if (info["time_button"].isChecked()):
+            self.convert_speed_to_time = False
+            self.name_map["speed"]["display"] = info["display"].text()
+            self.name_map["speed"]["lower_limit"] = info["lower_limit"].text()
+            self.name_map["speed"]["upper_limit"] = info["upper_limit"].text()
+            self.name_map["velocity"]["label"].setText("Time")
+            stored_info = self.name_map["time"]
+        else:
+            self.convert_speed_to_time = True
+            self.name_map["time"]["display"] = info["display"].text()
+            self.name_map["time"]["lower_limit"] = info["lower_limit"].text()
+            self.name_map["time"]["upper_limit"] = info["upper_limit"].text()
+            self.name_map["velocity"]["label"].setText("Speed")
+            stored_info = self.name_map["speed"]
+
+        self.name_map["velocity"]["max_upper_limit"] = stored_info["max_upper_limit"]
+        self.name_map["velocity"]["min_lower_limit"] = stored_info["min_lower_limit"]
+        self.name_map["velocity"]["lower_limit"].setText(stored_info["lower_limit"])
+        self.name_map["velocity"]["upper_limit"].setText(stored_info["upper_limit"])
+        self.name_map["velocity"]["display"].setText(stored_info["display"])
+        # update the position of the slider bar
+        self.update_slider_bar("velocity")
+        # if in 'Time' mode, command the motor registers with the last stored 'time' value
+        self.update_velocity()
+
+
+# Checkbox callbacks
+
+    ### @brief Event handler when the 'Realtime' checkboxes are selected/deselected
+    ### @details - the 'Move' button is only disabled when both 'Realtime' checkboxes are selected
+    def update_move_button_state(self):
+        if not (self.name_map["pan"]['checkbox'].isChecked() and self.name_map["tilt"]['checkbox'].isChecked()):
+            self.move_button.setEnabled(True)
+        else:
+            self.move_button.setEnabled(False)
+
+    ### @brief Event handler when the 'External Joystick' checkbox is selected/deselected
+    ### @details - ensures that Velocity control is set to 'Time' with a value of 0  and that fields are not editable when checked;
+    ###            when not checked, it enables the 'Velocity' control fields
+    def external_joystick_mode(self):
+        info = self.name_map["velocity"]
+        if (self.ext_joy_checkbox.isChecked()):
+            if (info["time_button"].isChecked() == False):
+                info["time_button"].setChecked(True)
+            info["display"].setText("0")
+            self.srv_motor_registers(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=0)
+            info["time_button"].setEnabled(False)
+            info["speed_button"].setEnabled(False)
+            info["display"].setReadOnly(True)
+            info["upper_limit"].setReadOnly(True)
+            info["lower_limit"].setReadOnly(True)
+            info["slider"].setEnabled(False)
+        else:
+            info["time_button"].setEnabled(True)
+            info["speed_button"].setEnabled(True)
+            info["display"].setReadOnly(False)
+            info["upper_limit"].setReadOnly(False)
+            info["lower_limit"].setReadOnly(False)
+            info["slider"].setEnabled(True)
+
+# Display callbacks
+
+    ### @brief Event handler when a 'lower limit display' is changed
+    ### @param name - name of the slider group to which the 'lower limit display' belongs (Pan, Tilt, or Velocity)
+    ### @details - the function makes sure that the lower limit is valid; it also updates the valid workspace of the joystick
+    def update_lower_limit(self, name):
+        info = self.name_map[name]
+        lower_lim = float(info['lower_limit'].text())
+        upper_lim = float(info['upper_limit'].text())
+        format = "%.1f"
+        # if updating the velocity slider when in 'Time' mode, then display units as integers
+        if (name == "velocity" and self.name_map["velocity"]["time_button"].isChecked()):
+            format = "%d"
+            info['lower_limit'].setText(format % lower_lim)
+        if (lower_lim < info['min_lower_limit']):
+            info['lower_limit'].setText(format % info['min_lower_limit'])
+        if (lower_lim > upper_lim):
+            info['lower_limit'].setText(format % (upper_lim - 0.1))
+        # update the boundary limits shown in the joystick widget
+        if (name == "pan"):
+            self.js_win.setPanMinMax(float(info["lower_limit"].text()), float(info["upper_limit"].text()))
+        elif (name == "tilt"):
+            self.js_win.setTiltMinMax(float(info["lower_limit"].text()), float(info["upper_limit"].text()))
+        self.update_slider_bar(name)
+
+    ### @brief Event handler when a 'upper limit display' is changed
+    ### @param name - name of the slider group to which the 'upper limit display' belongs (Pan, Tilt, or Velocity)
+    ### @details - the function makes sure that the upper limit is valid; it also updates the valid workspace of the joystick
+    def update_upper_limit(self, name):
+        info = self.name_map[name]
+        lower_lim = float(info['lower_limit'].text())
+        upper_lim = float(info['upper_limit'].text())
+        format = "%.1f"
+        # if updating the velocity slider when in 'Time' mode, then display units as integers
+        if (name == "velocity" and self.name_map["velocity"]["time_button"].isChecked()):
+            format = "%d"
+            info['upper_limit'].setText(format % upper_lim)
+        if (upper_lim > info['max_upper_limit']):
+            info['upper_limit'].setText(format % info['max_upper_limit'])
+        if (upper_lim < lower_lim):
+            info['upper_limit'].setText(format % (lower_lim + 0.1))
+        # update the boundary limits shown in the joystick widget
+        if (name == "pan"):
+            self.js_win.setPanMinMax(float(info["lower_limit"].text()), float(info["upper_limit"].text()))
+        elif (name == "tilt"):
+            self.js_win.setTiltMinMax(float(info["lower_limit"].text()), float(info["upper_limit"].text()))
+        self.update_slider_bar(name)
+
+    ### @brief Event handler when a slider is changed
+    ### @param name - name of the slider group to which the 'display' belongs (Pan, Tilt, or Velocity)
+    ### @details - the function publishes the desired positions to the motors; it also updates the joystick crosshair position
+    def update_display(self, name):
+        format = "%.1f"
+        # if updating the velocity slider when in 'Time' mode, then display units as integers
+        if (name == "velocity" and self.name_map["velocity"]["time_button"].isChecked()):
+            format = "%d"
+        info = self.name_map[name]
+        lower_lim = float(info['lower_limit'].text())
+        upper_lim = float(info['upper_limit'].text())
+        slider_value = info['slider'].value()
+        pctvalue = slider_value / float(RANGE)
+        value = pctvalue * (upper_lim - lower_lim) + lower_lim
+        info['display'].setText(format % value)
+
+        # if the 'Pan' or 'Tilt' positions are being adjusted...
+        if (name is not "velocity"):
+            self.joint_commands.cmd[info['joint']] = self.deg2rad(value)
+
+            # if the user is currently using a slider, then update the joystick crosshair
+            if self.js_win and (self.js_win.isActive() == False):
+                joint_commands = [self.rad2deg(x) for x in self.joint_commands.cmd]
+                self.js_win.setJointCommands(joint_commands)
+
+            # if the user is currently using the joystick or the slider in Realtime mode...
+            if (self.name_map[name]['checkbox'].isChecked() or (self.js_win and self.js_win.isActive())):
+                # if in 'Time' mode, then just publish the desired positions
+                if (self.convert_speed_to_time == False):
+                    self.pub_cmds.publish(self.joint_commands)
+                # if in 'Speed' mode and the calling function is NOT 'self.set_and_move', then allow the ROS Timer
+                # to convert 'Speed' values to 'Time' values and command the motors. If the calling function is
+                # 'self.set_and_move', then skip this since that function already does the conversion and commands the motors
+                elif (self.convert_speed_to_time == True and self.set_and_move_cmd == False):
+                    with self.speed_mutex:
+                        self.execute_speed_cmd = True
+
+
+# Slider callbacks
+
+    ### @brief Event handler when a display is changed
+    ### @param name - name of the slider group to which the 'slider' belongs (Pan, Tilt, or Velocity)
+    ### @details - the function updates the slider position to reflect that shown in the display
+    def update_slider_bar(self, name):
+        format = "%.1f"
+        if (name == "velocity" and self.name_map["velocity"]["time_button"].isChecked()):
+            format = "%d"
+        info = self.name_map[name]
+        lower_lim = float(info['lower_limit'].text())
+        upper_lim = float(info['upper_limit'].text())
+        value = float(info['display'].text())
+        if (value < lower_lim):
+            value = lower_lim
+            info['display'].setText(format % lower_lim)
+        if (value > upper_lim):
+            value = upper_lim
+            info['display'].setText(format % upper_lim)
+        pctvalue = (value - lower_lim)/(upper_lim - lower_lim)
+        info['slider'].setValue(int(pctvalue * float(RANGE)))
+        # since the slider bar is updated, the 'update_display' function will automatically be called which will publish the commands
+
+    ### @brief Event handler when the 'velocity' slider is released
+    ### @details - if the 'Time' option is toggled, the time shown in the display is written to the motor registers; now any move will take that amount of time;
+    ###            if in 'Speed' mode, this conversion is done when the 'Move' button is pressed or during slider/joystick movement
+    def update_velocity(self):
+        info = self.name_map["velocity"]
+        if (info["time_button"].isChecked()):
+            velocity = int(float(info["display"].text()))
+            resp = self.srv_motor_registers(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=velocity)
+
+# At program exit
+
+    ### @brief Helper function that displays a QMessageBox when the user is either torqueing off the motors or exiting the GUI
+    ### @param title_text - Header text that is displayed in the QMessageBox
+    ### @param info_text - regular text giving more information to the user
+    ### @param closing - 'True' if the 'X' button on the GUI was pressed; 'False' otherwise
+    ### @param close_window [out] - when the 'X' button is pressed on the GUI - if True, close the window immediately; otherwise, wait until the turret gets to its rest position
+    ### @param ignore_event [out] - when the 'X' button is pressed on the GUI followed by the 'X' or 'Cancel' buttons on the QMessageBox, - this is 'True'; otherwise, it's set to 'False'
+    def torque_off_window(self, title_text, info_text, closing=False):
+        close_window = True
+        ignore_event = True
+        warn_dlg = QMessageBox()
+        warn_dlg.setIcon(QMessageBox.Warning)
+        warn_dlg.setText(title_text)
+        warn_dlg.setInformativeText(info_text)
+        warn_dlg.setStandardButtons(QMessageBox.No | QMessageBox.Ok | QMessageBox.Yes)
+        if (closing):
+            warn_dlg.addButton(QMessageBox.Cancel)
+        on_button = warn_dlg.button(QMessageBox.No)
+        rest_button = warn_dlg.button(QMessageBox.Ok)
+        off_button = warn_dlg.button(QMessageBox.Yes)
+        on_button.setText("Leave Torqued On")
+        rest_button.setText("Go to Rest Position and Torque Off")
+        off_button.setText("Torque Off")
+        res = warn_dlg.exec_()
+
+        if (res == QMessageBox.No):
+            ignore_event = False
+        elif (res == QMessageBox.Ok):
+            self.torque_off_delay = self.set_and_move(self.rest_pos[0], self.rest_pos[1]) / 1000.0
+            self.delay_start_time = rospy.get_time()
+            self.start_delay = True
+            close_window = False
+            ignore_event = False
+        elif (res == QMessageBox.Yes):
+            self.srv_torque_off()
+            self.torque_label.setText("Torqued Off")
+            self.torque_label.setStyleSheet("QLabel {color : red;}")
+            self.torque_button.setText("Torque On")
+            ignore_event = False
+
+        return close_window, ignore_event
+
+    ### @brief Event handler when the GUI exits
+    ### @param event [unused] - event of type QCloseEvent
+    ### @details - opens a QMessageBox window asking the user whether the Turret motors should be torqued off before exiting
+    def closeEvent(self, event):
+        if (self.close_gui == True or self.torque_label.text() == "Torqued Off"):
+            return
+        warning_title_text = "<h3>Before you go...</h3>"
+        warning_info_text = "It is recommended to torque off the turret before exiting so the motors do not get overstressed. Note that this could cause the turret to <b>suddenly lose its position</b>, potentially damaging any onboard equipment. What would you like to do?"
+        close_window, ignore_event = self.torque_off_window(warning_title_text, warning_info_text, True)
+        if (ignore_event):
+            event.ignore()
+        elif (close_window == False):
+            self.close_gui = True
+            event.ignore()
+
+if __name__ == '__main__':
+    rospy.init_node('turret_control')
+    app = QApplication(sys.argv)
+    turret_gui = TurretControlGUI()
+    # Only kill the program at node shutdown
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    sys.exit(app.exec_())
