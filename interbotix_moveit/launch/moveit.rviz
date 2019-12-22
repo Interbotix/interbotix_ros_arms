@@ -4,16 +4,11 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /MotionPlanning1
+        - /Global Options1
       Splitter Ratio: 0.41727671
-    Tree Height: 421
+    Tree Height: 444
   - Class: rviz/Help
     Name: Help
-  - Class: rviz/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
 Toolbars:
   toolButtonStyle: 2
 Visualization Manager:
@@ -74,75 +69,75 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/base_link:
+          wx250/base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/ee_arm_link:
+          wx250/ee_arm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/ee_gripper_link:
+          wx250/ee_gripper_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/fingers_link:
+          wx250/fingers_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/forearm_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          wx200/gripper_bar_link:
+          wx250/forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/gripper_link:
+          wx250/gripper_bar_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/gripper_prop_link:
+          wx250/gripper_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/left_finger_link:
+          wx250/gripper_prop_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/right_finger_link:
+          wx250/left_finger_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/shoulder_link:
+          wx250/right_finger_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/upper_arm_link:
+          wx250/shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/wrist_link:
+          wx250/upper_arm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-        Loop Animation: true
+          wx250/wrist_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+        Loop Animation: false
         Robot Alpha: 0.5
         Robot Color: 150; 50; 150
         Show Robot Collision: true
         Show Robot Visual: true
         Show Trail: false
-        State Display Time: 0.05 s
+        State Display Time: REALTIME
         Trail Step Size: 1
         Trajectory Topic: move_group/display_planned_path
       Planning Metrics:
@@ -159,8 +154,8 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: interbotix_arm
-        Query Goal State: true
-        Query Start State: true
+        Query Goal State: false
+        Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
         Start State Color: 0; 255; 0
@@ -185,69 +180,69 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/base_link:
+          wx250/base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/ee_arm_link:
+          wx250/ee_arm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/ee_gripper_link:
+          wx250/ee_gripper_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/fingers_link:
+          wx250/fingers_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-          wx200/forearm_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          wx200/gripper_bar_link:
+          wx250/forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/gripper_link:
+          wx250/gripper_bar_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/gripper_prop_link:
+          wx250/gripper_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/left_finger_link:
+          wx250/gripper_prop_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/right_finger_link:
+          wx250/left_finger_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/shoulder_link:
+          wx250/right_finger_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/upper_arm_link:
+          wx250/shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          wx200/wrist_link:
+          wx250/upper_arm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-        Robot Alpha: 0.5
+          wx250/wrist_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+        Robot Alpha: 1
         Show Robot Collision: false
         Show Robot Visual: true
       Value: true
@@ -262,7 +257,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 48; 48; 48
+    Background Color: 54; 65; 222
     Default Light: true
     Fixed Frame: world
     Frame Rate: 30
@@ -276,25 +271,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 2.29002857
+      Distance: 2
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.113567002
-        Y: 0.105920002
-        Z: 2.23518001e-07
-      Focal Shape Fixed Size: true
+        X: 0.5
+        Y: 0.5
+        Z: 0
+      Focal Shape Fixed Size: false
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.294797242
+      Pitch: 0.785398185
       Target Frame: world
       Value: XYOrbit (rviz)
-      Yaw: 5.14494944
+      Yaw: 0.785398185
     Saved: ~
 Window Geometry:
   Displays:
@@ -308,9 +303,7 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002ad000003dafc0200000007fb000000100044006900730070006c00610079007301000000280000023a000000d700fffffffb0000000800480065006c00700000000342000000bb0000007300fffffffb0000000a0056006900650077007300000003b0000000b0000000ad00fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004a00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000002680000019a0000018300ffffff0000048c000003da00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Views:
-    collapsed: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000002ad000003dafc0200000008fb000000100044006900730070006c006100790073010000002800000251000000d700fffffffb0000000800480065006c00700000000342000000bb0000007300fffffffb0000000a0056006900650077007300000001c9000000b00000000000000000fb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004a00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000027f000001830000018300fffffffb0000000a0056006900650077007300000002ad0000015500000000000000000000048c000003da00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Width: 1855
   X: 65
   Y: 24

@@ -14,11 +14,10 @@ interbotix_arm:
   solve_type: Speed
   position_only_ik: true
 
-# Position-only-ik and orientation-only-ik work even if position_only_ik is not set below
+# Position-only-ik and orientation-only-ik work automatically for the LMA plugin
 
 # interbotix_arm:
 #   kinematics_solver: lma_kinematics_plugin/LMAKinematicsPlugin
 #   kinematics_solver_search_resolution: 0.005
 #   kinematics_solver_timeout: 0.005
 #   kinematics_solver_attempts: 3
-  # position_only_ik: true

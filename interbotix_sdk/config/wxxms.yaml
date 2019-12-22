@@ -27,9 +27,16 @@
 # http://support.interbotix.com/ under the 'Specifications' section. (Click a robot and scroll down to the 'Default Joint Limits' section.)
 #
 # To make the process of loading and setting the configs more efficient, the 'order' sequence defines the order that the interbotix_sdk node should process the configs.
-
+# Additionally, the 'order' sequence defines a 'group' of joints (excluding the 'gripper') that the interbotix_sdk will control at the exact same time (as opposed to
+# commanding each of the joints in the group sequentially which would increase lag and not be as efficient).
+#
+# If your application involves controlling other joints in addition to an Interbotix Robot, place the names of those joints in the 'singles' sequence. You can then
+# control these joints individually using the 'single_joint/command' topic. Note that by default, all the motors listed in the 'order' sequence (excluding 'shadow'
+# motors) can be controlled individually using the above topic as well. Also note that there is no limit to the number of additional joints that can be placed in this
+# sequence.
 
 order: [pan, tilt]
+singles: []
 
 pan:
   ID: 1

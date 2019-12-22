@@ -28,7 +28,7 @@ int main(int argc, char **argv)
   ros::Publisher pub_positions = n.advertise<interbotix_sdk::JointCommands>(robot_name_2 + "/joint/commands", 100);
   ros::Publisher pub_gripper = n.advertise<std_msgs::Float64>(robot_name_2 + "/gripper/command", 100);
   // Need to torque off the first robot arm as by default, it is torqued on
-  ros::ServiceClient srv_torque_off = n.serviceClient<std_srvs::Empty>(robot_name_1 + "/torque_arm_off");
+  ros::ServiceClient srv_torque_off = n.serviceClient<std_srvs::Empty>(robot_name_1 + "/torque_joints_off");
   // In this demo, let's put the second robot arm into 'position' control for the arm and the gripper.
   // Velocity control could also work but might not be as accurate for very quick motions. Note that this step
   // isn't really neccessary since the second robot's mode is already presest in the launch file.
@@ -57,10 +57,9 @@ int main(int argc, char **argv)
 
   // Set the operating mode of the second robot arm
   interbotix_sdk::OperatingModes op_srv;
-  op_srv.request.arm_mode = "position";
-  op_srv.request.use_custom_arm_profiles = true;
-  op_srv.request.gripper_mode = "position";
-  op_srv.request.use_custom_gripper_profiles = true;
+  op_srv.request.cmd = interbotix_sdk::OperatingModes::Request::ARM_JOINTS_AND_GRIPPER;
+  op_srv.request.mode = "position";
+  op_srv.request.use_custom_profiles = true;
   success = srv_op_mode.call(op_srv);
   if (!success)
   {

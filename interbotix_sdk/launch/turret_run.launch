@@ -18,7 +18,7 @@
     <arg name="use_external_gripper_urdf"       value="$(arg use_external_urdf)"/>
     <arg name="external_gripper_urdf_loc"       value="$(arg external_urdf_loc)"/>
     <arg name="load_gazebo_material"            value="false"/>
-    <arg name="load_moveit_world_frame"         value="false"/>
+    <arg name="use_moveit"                      value="false"/>
     <arg name="use_default_rviz"                value="$(arg use_default_rviz)"/>
   </include>
 
@@ -40,7 +40,7 @@
     <param name="gripper_operating_mode"        value="none"/>
     <param name="gripper_profile_velocity"      value="0"/>
     <param name="gripper_profile_acceleration"  value="0"/>
-    <param name="load_moveit_world_frame"       value="false"/>
+    <param name="use_moveit"                    value="false"/>
   </node>
 
 </launch>

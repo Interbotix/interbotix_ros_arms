@@ -3,16 +3,19 @@
 ## Overview
 This package contains a small API modeled after the [Move Group C++ Interface Tutorial](https://github.com/ros-planning/moveit_tutorials/blob/kinetic-devel/doc/move_group_interface/src/move_group_interface_tutorial.cpp) that allows a user to command desired end-effector poses to an Interbotix arm. It is not meant to be all-encompassing but rather should be viewed as a starting point for someone interested in creating their own MoveIt interface to interact with an arm. The package also contains a small GUI that can be used to pose the end-effector.
 
+Finally, this package also contains a modified version of the [Move Group Python Interface Tutorial](https://github.com/ros-planning/moveit_tutorials/blob/kinetic-devel/doc/move_group_python_interface/scripts/move_group_python_interface_tutorial.py) script that can be used as a guide for those users who would like to interface with an Interbotix robot via the MoveIt Commander Python module.
+
 ## Structure
 ![moveit_interface_flowchart](images/moveit_interface_flowchart.png)
 As shown above, this package builds on top of both the *interbotix_gazebo* and *interbotix_sdk* packages. To get familiar with those packages, please refer to their respective READMEs. The *interbotix_moveit_interface* nodes are described below:
-- **moveit_interface_node** - a small API that makes it easier for a user to command custom poses to the end-effector of an Interbotix arm; it uses MoveIt's planner behind the scenes to generate desired joint trajectories
+- **moveit_interface_node** - a small C++ API that makes it easier for a user to command custom poses to the end-effector of an Interbotix arm; it uses MoveIt's planner behind the scenes to generate desired joint trajectories
 - **moveit_interface_gui** - a GUI (modeled after the one in the *joint_state_publisher* package) that allows a user to enter in desired end-effector poses via text fields or sliders; it uses the **moveit_interface_node** API to plan and execute trajectories
+- **moveit_python_interface** - a modified version of the script used in the [Move Group Python Interface](http://docs.ros.org/kinetic/api/moveit_tutorials/html/doc/move_group_python_interface/move_group_python_interface_tutorial.html) tutorial that is meant to work with an Interbotix arm; just press 'Enter' in the terminal to walk through the different steps
 
 ## Usage
 To run this package on the physical robot, type the line below in a terminal (assuming the ViperX 300 is being launched).
 ```
-$ roslaunch interbotix_moveit_interface moveit_interface.launch robot_name:=vx300 use_actual:=true
+$ roslaunch interbotix_moveit_interface moveit_interface.launch robot_name:=vx300 use_cpp_interface:=true use_actual:=true
 ```
 A GUI should pop-up similar to the one below. In it, a user should specify the desired position and orientation of the end-effector (as defined by the 'ee_arm_link' w.r.t. the 'world' frame). This can be done either via the slider bars or by entering values into the text fields. Next, a user can press one of five buttons. They are:
 - **Plan Pose** - MoveIt will attempt to find a trajectory that places the end-effector at the desired position and orientation
@@ -32,8 +35,12 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | Argument | Description | Default Value |
 | -------- | ----------- | :-----------: |
 | robot_name | name of a robot (ex. 'wx200') | "" |
+| dof | the degrees of freedom of the arm; the PincherX 100 is the only arm with four dof - all the others have five or six | 5 |
+| use_fake | launch MoveIt with a MoveIt generated fake robot | false |
 | use_gazebo | launch MoveIt with a Gazebo simulated robot | false |
 | use_actual | launch MoveIt with the physical robot | false |
 | arm_operating_mode | if using the physical robot, set this to either "position" or "velocity" to let the *interbotix_sdk* node know whether to command the joint positions or velocities from the MoveIt JointTrajectory to the motors | position |
-| dof | the degrees of freedom of the arm; the PincherX 100 is the only arm with four dof - all the others have five or six | 5 |
+| use_cpp_interface | launch the custom C++ API node | false |
 | moveit_interface_gui | launch a custom GUI to interface with the **moveit_interface_node** so that the user can command specific end-effector poses (defined by 'ee_arm_link') | true |
+| use_python_interface | launch the Python Interface Tutorial node | false |
+| use_pid_cntlrs | set this to 'true' if you  would like to run PID controllers to make the motors better track the desired states when running the actual robot. Note that the 'arm_operating_mode' must be set to 'velocity' for this to work | false |

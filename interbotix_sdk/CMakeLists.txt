@@ -50,6 +50,7 @@ endif(NOT ${YAML_CPP_VERSION} VERSION_LESS "0.5")
 add_message_files(
   FILES
   JointCommands.msg
+  SingleCommand.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -93,6 +94,6 @@ include_directories(
 ## Declare a C++ executable
 ## Specify libraries to link a library or executable target against
 ## Add cmake target dependencies of the executable
-add_executable(arm_node src/arm_node.cpp src/arm_obj.cpp)
+add_executable(arm_node src/arm_node.cpp src/arm_obj.cpp src/pid.cpp)
 target_link_libraries(arm_node ${catkin_LIBRARIES} ${YAML_CPP_LIBRARIES})
 add_dependencies(arm_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})

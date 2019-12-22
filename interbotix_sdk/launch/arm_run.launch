@@ -7,13 +7,14 @@
   <arg name="use_default_gripper_fingers"       default="true"/>
   <arg name="use_external_gripper_urdf"         default="false"/>
   <arg name="external_gripper_urdf_loc"         default=""/>
-  <arg name="load_moveit_world_frame"           default="false"/>
   <arg name="arm_operating_mode"                default="position"/>
   <arg name="arm_profile_velocity"              default="131"/>
   <arg name="arm_profile_acceleration"          default="15"/>
   <arg name="gripper_operating_mode"            default="position"/>
   <arg name="gripper_profile_velocity"          default="0"/>
   <arg name="gripper_profile_acceleration"      default="0"/>
+  <arg name="use_moveit"                        default="false"/>
+  <arg name="use_pid_cntlrs"                    default="false"/>
 
   <include file="$(find interbotix_descriptions)/launch/description.launch">
     <arg name="robot_name"                      value="$(arg robot_name)"/>
@@ -24,7 +25,7 @@
     <arg name="use_external_gripper_urdf"       value="$(arg use_external_gripper_urdf)"/>
     <arg name="external_gripper_urdf_loc"       value="$(arg external_gripper_urdf_loc)"/>
     <arg name="load_gazebo_material"            value="false"/>
-    <arg name="load_moveit_world_frame"         value="$(arg load_moveit_world_frame)"/>
+    <arg name="use_moveit"                      value="$(arg use_moveit)"/>
     <arg name="use_default_rviz"                value="$(arg use_default_rviz)"/>
   </include>
 
@@ -46,7 +47,9 @@
     <param name="gripper_operating_mode"        value="$(arg gripper_operating_mode)"/>
     <param name="gripper_profile_velocity"      value="$(arg gripper_profile_velocity)"/>
     <param name="gripper_profile_acceleration"  value="$(arg gripper_profile_acceleration)"/>
-    <param name="load_moveit_world_frame"       value="$(arg load_moveit_world_frame)"/>
+    <param name="use_moveit"                    value="$(arg use_moveit)"/>
+    <param name="use_pid_cntlrs"                value="$(arg use_pid_cntlrs)"/>
+    <rosparam if="$(arg use_pid_cntlrs)" file="$(find interbotix_sdk)/pid_config/$(arg robot_model)_pid.yaml" command="load"/>
   </node>
 
 </launch>

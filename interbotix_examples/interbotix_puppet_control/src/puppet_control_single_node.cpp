@@ -25,7 +25,7 @@ int main(int argc, char **argv)
   ros::Publisher pub_positions = n.advertise<interbotix_sdk::JointCommands>("joint/commands", 100);
   ros::Publisher pub_gripper = n.advertise<std_msgs::Float64>("gripper/command", 100);
   // Need to torque off the robot arm as by default, it is torqued on
-  ros::ServiceClient srv_torque_off = n.serviceClient<std_srvs::Empty>("torque_arm_off");
+  ros::ServiceClient srv_torque_off = n.serviceClient<std_srvs::Empty>("torque_joints_off");
   // Get some robot info to figure out how many joints the robot has
   ros::ServiceClient srv_robot_info = n.serviceClient<interbotix_sdk::RobotInfo>("get_robot_info");
 

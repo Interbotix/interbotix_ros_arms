@@ -12,6 +12,7 @@ RobotArm::RobotArm(ros::NodeHandle *node_handle, const std::string robot_name, c
   arm_init_SDK_handlers();
   arm_init_operating_modes();
   arm_init_gripper();
+  arm_init_pid_controllers();
   arm_init_publishers();
   arm_init_subscribers();
   arm_init_services();
@@ -27,7 +28,7 @@ RobotArm::~RobotArm()
   delete [] joint_ids_read;
   delete [] joint_ids_write;
   bool use_moveit;
-  ros::param::param<bool>("~load_moveit_world_frame", use_moveit, false);
+  ros::param::param<bool>("~use_moveit", use_moveit, false);
   if (use_moveit)
   {
     delete joint_action_server;
@@ -43,7 +44,7 @@ void RobotArm::arm_set_joints_to_position_control(const int32_t joint_profile_ve
   bool result = false;
   const char* log = NULL;
 
-  for (auto const& motor:all_motors)
+  for (auto const& motor:arm_motors)
   {
     if (motor.name != "gripper")
     {
@@ -62,7 +63,7 @@ void RobotArm::arm_set_joints_to_velocity_control(const int32_t wheel_profile_ac
   bool result = false;
   const char* log = NULL;
 
-  for (auto const& motor:all_motors)
+  for (auto const& motor:arm_motors)
   {
     if (motor.name != "gripper")
     {
@@ -80,7 +81,7 @@ void RobotArm::arm_set_joints_to_current_control(void)
   bool result = false;
   const char* log = NULL;
 
-  for (auto const& motor:all_motors)
+  for (auto const& motor:arm_motors)
   {
     if (motor.name != "gripper")
     {
@@ -100,7 +101,7 @@ void RobotArm::arm_set_joints_to_pwm_control(void)
   bool result = false;
   const char* log = NULL;
 
-  for (auto const& motor:all_motors)
+  for (auto const& motor:arm_motors)
   {
     if (motor.name != "gripper")
     {
@@ -195,100 +196,80 @@ void RobotArm::arm_set_joint_pwms(int32_t joint_pwms[])
   arm_check_error(result, &log);
 }
 
-/// @brief Set operating mode for the gripper to position [rad] control
-/// @param joint_profile_vel - max angular velocity that the gripper motor is allowed to reach - uses register values
-/// @param joint_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-void RobotArm::arm_set_gripper_to_position_control(const int32_t joint_profile_vel, const int32_t joint_profile_accel)
+/// @brief Set operating mode for the specified joint to position [rad] control
+/// @param joint_name - name of the joint for which the operating mode will be changed
+/// @param joint_profile_vel - max angular velocity that the specified joint is allowed to reach - uses register values
+/// @param joint_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+void RobotArm::arm_set_single_joint_to_position_control(const std::string joint_name, const int32_t joint_profile_vel, const int32_t joint_profile_accel)
 {
-  if (gripper.name == "")
-  {
-    ROS_ERROR("No gripper was created. Did you include 'gripper' in the 'order' sequence of the config file?");
-    return;
-  }
   const char* log = NULL;
-  bool result = dxl_wb.jointMode(gripper.motor_id, joint_profile_vel, joint_profile_accel, &log);
+  bool result = dxl_wb.jointMode(joint_map[joint_name].motor_id, joint_profile_vel, joint_profile_accel, &log);
   arm_check_error(result, &log);
-  gripper_operating_mode = State::POSITION;
-  ROS_INFO("Gripper set to position control with a profile velocity of %d and a profile acceleration of %d.", joint_profile_vel, joint_profile_accel);
+  joint_map[joint_name].mode = State::POSITION;
+  ROS_INFO("%s set to position control with a profile velocity of %d and a profile acceleration of %d.", joint_name.c_str(), joint_profile_vel, joint_profile_accel);
 }
 
-/// @brief Set operating mode for the gripper to ext_position [rad] control (servo can perform multiple turns instead of only one revolution)
-/// @param joint_profile_vel - max angular velocity that the gripper motor is allowed to reach - uses register values
-/// @param joint_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-/// @details - this mode should only be used with a custom gripper that has the ability to freely rotate
-void RobotArm::arm_set_gripper_to_ext_position_control(const int32_t joint_profile_vel, const int32_t joint_profile_accel)
+/// @brief Set operating mode for the specified joint to ext_position [rad] control (servo can perform multiple turns instead of only one revolution)
+/// @param joint_name - name of the joint for which the operating mode will be changed
+/// @param joint_profile_vel - max angular velocity that the specified joint is allowed to reach - uses register values
+/// @param joint_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+/// @details - this mode should only be used with a joint that has the ability to freely rotate
+void RobotArm::arm_set_single_joint_to_ext_position_control(const std::string joint_name, const int32_t joint_profile_vel, const int32_t joint_profile_accel)
 {
-  if (gripper.name == "")
-  {
-    ROS_ERROR("No gripper was created. Did you include 'gripper' in the 'order' sequence of the config file?");
-    return;
-  }
   const char* log = NULL;
-  dxl_wb.torqueOff(gripper.motor_id);
-  bool result = dxl_wb.setExtendedPositionControlMode(gripper.motor_id, &log);
+  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
+  bool result = dxl_wb.setExtendedPositionControlMode(joint_map[joint_name].motor_id, &log);
   arm_check_error(result, &log);
-  dxl_wb.itemWrite(gripper.motor_id, "Profile_Velocity", joint_profile_vel, &log);
-  dxl_wb.itemWrite(gripper.motor_id, "Profile_Acceleration", joint_profile_accel, &log);
-  dxl_wb.torqueOn(gripper.motor_id);
-  gripper_operating_mode = State::EXT_POSITION;
-  ROS_INFO("Gripper set to extended position control with a profile velocity of %d and a profile acceleration of %d.", joint_profile_vel, joint_profile_accel);
+  dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Profile_Velocity", joint_profile_vel, &log);
+  dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Profile_Acceleration", joint_profile_accel, &log);
+  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  joint_map[joint_name].mode = State::EXT_POSITION;
+  ROS_INFO("%s set to extended position control with a profile velocity of %d and a profile acceleration of %d.", joint_name.c_str(), joint_profile_vel, joint_profile_accel);
 }
 
-/// @brief Set operating mode for the gripper to velocity [rad/s] control
-/// @param wheel_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-void RobotArm::arm_set_gripper_to_velocity_control(const int32_t wheel_profile_accel)
+/// @brief Set operating mode for the specified joint to velocity [rad/s] control
+/// @param joint_name - name of the joint for which the operating mode will be changed
+/// @param wheel_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+void RobotArm::arm_set_single_joint_to_velocity_control(const std::string joint_name, const int32_t wheel_profile_accel)
 {
-  if (gripper.name == "")
-  {
-    ROS_ERROR("No gripper was created. Did you include 'gripper' in the 'order' sequence of the config file?");
-    return;
-  }
   const char* log = NULL;
-  bool result = dxl_wb.wheelMode(gripper.motor_id, wheel_profile_accel, &log);
+  bool result = dxl_wb.wheelMode(joint_map[joint_name].motor_id, wheel_profile_accel, &log);
   arm_check_error(result, &log);
-  gripper_operating_mode = State::VELOCITY;
-  ROS_INFO("Gripper set to velocity control with a profile acceleration of %d.", wheel_profile_accel);
+  joint_map[joint_name].mode = State::VELOCITY;
+  ROS_INFO("%s set to velocity control with a profile acceleration of %d.", joint_name.c_str(), wheel_profile_accel);
 }
 
-/// @brief Set operating mode for the gripper to current [mA] control (Viper robots only)
-void RobotArm::arm_set_gripper_to_current_control(void)
+/// @brief Set operating mode for the specified joint to current [mA] control
+/// @param joint_name - name of the joint for which the operating mode will be changed
+void RobotArm::arm_set_single_joint_to_current_control(const std::string joint_name)
 {
-  if (gripper.name == "")
-  {
-    ROS_ERROR("No gripper was created. Did you include 'gripper' in the 'order' sequence of the config file?");
-    return;
-  }
   const char* log = NULL;
-  dxl_wb.torqueOff(gripper.motor_id);
-  bool result = dxl_wb.setCurrentControlMode(gripper.motor_id, &log);
+  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
+  bool result = dxl_wb.setCurrentControlMode(joint_map[joint_name].motor_id, &log);
   arm_check_error(result, &log);
-  dxl_wb.torqueOn(gripper.motor_id);
-  gripper_operating_mode = State::CURRENT;
-  ROS_INFO("Gripper set to current control.");
+  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  joint_map[joint_name].mode = State::CURRENT;
+  ROS_INFO("%s set to current control.", joint_name.c_str());
 }
 
-/// @brief Set operating mode for the gripper to pwm control
-void RobotArm::arm_set_gripper_to_pwm_control(void)
+/// @brief Set operating mode for the specified joint to pwm control
+/// @param joint_name - name of the joint for which the operating mode will be changed
+void RobotArm::arm_set_single_joint_to_pwm_control(const std::string joint_name)
 {
-  if (gripper.name == "")
-  {
-    ROS_ERROR("No gripper was created. Did you include 'gripper' in the 'order' sequence of the config file?");
-    return;
-  }
   const char* log = NULL;
   bool result = false;
-  dxl_wb.torqueOff(gripper.motor_id);
-  const char* model_name = dxl_wb.getModelName(gripper.motor_id, &log);
+  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
+  const char* model_name = dxl_wb.getModelName(joint_map[joint_name].motor_id, &log);
   // For some reason, set 'setPWMControlMode' function does not work properly on XL430 servos.
   // To get around this, just write to the register directly using the 'itemWrite' function.
   if (strncmp(model_name, "XL430", strlen("XL430")) == 0)
-    result = dxl_wb.itemWrite(gripper.motor_id, "Operating_Mode", PWM_CONTROL_MODE, &log);
+    result = dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Operating_Mode", PWM_CONTROL_MODE, &log);
   else
-    result = dxl_wb.setPWMControlMode(gripper.motor_id, &log);
+    result = dxl_wb.setPWMControlMode(joint_map[joint_name].motor_id, &log);
   arm_check_error(result, &log);
-  dxl_wb.torqueOn(gripper.motor_id);
-  gripper_operating_mode = State::PWM;
-  ROS_INFO("Gripper set to pwm control.");
+  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  joint_map[joint_name].mode = State::PWM;
+  ROS_INFO("%s set to pwm control.", joint_name.c_str());
 }
 
 /// @brief Set gripper finger position
@@ -296,55 +277,47 @@ void RobotArm::arm_set_gripper_to_pwm_control(void)
 void RobotArm::arm_set_gripper_linear_position(const float dist)
 {
   float horn_angle = arm_calculate_gripper_angular_position(dist);
-  arm_set_gripper_angular_position(horn_angle);
+  arm_set_single_joint_angular_position("gripper", horn_angle);
 }
 
-/// @brief Set gripper angle
-/// @param horn_angle - desired gripper angular position [rad]
-void RobotArm::arm_set_gripper_angular_position(const float horn_angle)
+/// @brief Set the angular position for the specified joint
+/// @param joint_name - name of the joint to command
+/// @param horn_angle - desired angular position [rad]
+void RobotArm::arm_set_single_joint_angular_position(const std::string joint_name, const float horn_angle)
 {
-  if (gripper_operating_mode != State::POSITION && gripper_operating_mode != State::EXT_POSITION)
-    arm_set_gripper_to_position_control(JOINT_PROFILE_VELOCITY, JOINT_PROFILE_ACCELERATION);
-
   const char* log = NULL;
-  bool result = dxl_wb.goalPosition(gripper.motor_id, horn_angle, &log);
+  bool result = dxl_wb.goalPosition(joint_map[joint_name].motor_id, horn_angle, &log);
   arm_check_error(result, &log);
 }
 
-/// @brief Set gripper velocity
-/// @param vel - desired gripper angular velocity [rad/s]
-void RobotArm::arm_set_gripper_velocity(const float vel)
+/// @brief Set the velocity for the specified joint
+/// @param joint_name - name of the joint to command
+/// @param vel - desired angular velocity [rad/s]
+void RobotArm::arm_set_single_joint_velocity(const std::string joint_name, const float vel)
 {
-  if (gripper_operating_mode != State::VELOCITY)
-    arm_set_gripper_to_velocity_control(WHEEL_PROFILE_ACCELERATION);
-
   const char* log = NULL;
-  bool result = dxl_wb.goalVelocity(gripper.motor_id, vel, &log);
+  bool result = dxl_wb.goalVelocity(joint_map[joint_name].motor_id, vel, &log);
   arm_check_error(result, &log);
 }
 
-/// @brief Set gripper current
-/// @param current - desired gripper current [mA]
-void RobotArm::arm_set_gripper_current(const float current)
+/// @brief Set the current for the specified joint
+/// @param joint_name - name of the joint to command
+/// @param current - desired current [mA]
+void RobotArm::arm_set_single_joint_current(const std::string joint_name, const float current)
 {
-  if (gripper_operating_mode != State::CURRENT)
-    arm_set_gripper_to_current_control();
-
   const char* log = NULL;
   int16_t current_val = dxl_wb.convertCurrent2Value(current);
-  bool result = dxl_wb.itemWrite(gripper.motor_id, "Goal_Current", current_val, &log);
+  bool result = dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Goal_Current", current_val, &log);
   arm_check_error(result, &log);
 }
 
-/// @brief Set gripper pwm
+/// @brief Set the pwm for the specified joint
+/// @param joint_name - name of the joint to command
 /// @param pwm - desired pwm - values between 150-350 (or the negative equiavlent) seem to work best
-void RobotArm::arm_set_gripper_pwm(int32_t pwm)
+void RobotArm::arm_set_single_joint_pwm(const std::string joint_name, int32_t pwm)
 {
-  if (gripper_operating_mode != State::PWM)
-    arm_set_gripper_to_pwm_control();
-
   const char* log = NULL;
-  bool result = dxl_wb.itemWrite(gripper.motor_id, "Goal_PWM", pwm, &log);
+  bool result = dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Goal_PWM", pwm, &log);
   arm_check_error(result, &log);
 }
 
@@ -358,17 +331,17 @@ void RobotArm::arm_set_gripper_max_effort(const double max_effort)
 /// @brief Torque on all motors (including the gripper)
 void RobotArm::arm_torque_on(void)
 {
-  for (auto const& joint:joints)
+  for (auto const& joint:all_joints)
     dxl_wb.torqueOn(joint.motor_id);
-  ROS_INFO("Arm torqued on!");
+  ROS_INFO("Robot torqued on!");
 }
 
 /// @brief Torque off all motors (including the gripper)
 void RobotArm::arm_torque_off(void)
 {
-  for (auto const& joint:joints)
+  for (auto const& joint:all_joints)
     dxl_wb.torqueOff(joint.motor_id);
-  ROS_INFO("Arm torqued off!");
+  ROS_INFO("Robot torqued off!");
 }
 
 /// @brief Initializes the port to talk to the Dynamixel motors
@@ -407,25 +380,37 @@ void RobotArm::arm_get_motor_configs(void)
   }
 
   YAML::Node order_node = dxl_config["order"];
+  YAML::Node singles_node = dxl_config["singles"];
+  std::vector <YAML::Node> nodes {order_node, singles_node};
   joint_num_write = 0;
+  use_arm = false;
+  use_gripper = false;
+
+  if (order_node.size() > 0)
+    use_arm = true;
+
   // Read in each node in the yaml file according to the 'order' sequence. This will make it easier
   // to keep track of where each motor is located in an array. This first loop is mainly used to get
   // a vector of all the motors and their corresponding Dynamixel IDs, as well as determine the number
   // of joints that need to be commanded.
-  for(size_t i{0}; i < order_node.size(); i++)
+  for (auto const& node: nodes)
   {
-    std::string name = order_node[i].as<std::string>();
-    YAML::Node item = dxl_config[name];
-    int32_t id = item["ID"].as<int32_t>();
-    Motor motor = {name, (uint8_t) id};
-    all_motors.push_back(motor);
-    int32_t secondary_id = item["Secondary_ID"].as<int32_t>();
-    // Determine if a motor is a shadow of another by checking its secondary 'shadow' ID.
-    // Only increment 'joint_num_write' if the motor's secondary_id register is disabled (set to 255)
-    if (name != "gripper" && secondary_id == 255)
-      joint_num_write++;
-    if (name == "gripper")
-      gripper = motor;
+    for(size_t i{0}; i < node.size(); i++)
+    {
+      std::string name = node[i].as<std::string>();
+      YAML::Node item = dxl_config[name];
+      int32_t id = item["ID"].as<int32_t>();
+      int32_t secondary_id = item["Secondary_ID"].as<int32_t>();
+      Motor motor = {name, (uint8_t) id};
+      arm_motors.push_back(motor);
+      all_motors.push_back(motor);
+      // Determine if a motor is a shadow of another by checking its secondary 'shadow' ID.
+      // Only increment 'joint_num_write' if the motor's secondary_id register is disabled (set to 255)
+      if (node == dxl_config["order"] && name != "gripper" && secondary_id == 255)
+        joint_num_write++;
+      if (node == dxl_config["order"] && name == "gripper")
+        use_gripper = true;
+    }
   }
 
   // Now that the number of joints that need to be commanded has been figured out, create an array of
@@ -435,35 +420,45 @@ void RobotArm::arm_get_motor_configs(void)
   size_t cntr = 0;
 
   // For each node in the yaml file, read in the register names and the values that should be written to them.
-  for (size_t i{0}; i < order_node.size(); i++)
+  for (auto const& node: nodes)
   {
-    std::string name = order_node[i].as<std::string>();
-    YAML::Node item = dxl_config[name];
-    for (YAML::const_iterator it_item = item.begin(); it_item != item.end(); it_item++)
+    for (size_t i{0}; i < node.size(); i++)
     {
-      std::string item_name = it_item->first.as<std::string>();
-      int32_t value = it_item->second.as<int32_t>();
-
-      if (item_name == "ID")
-        continue;
-      if (item_name == "Secondary_ID" && value == 255)
+      std::string name = node[i].as<std::string>();
+      YAML::Node item = dxl_config[name];
+      int32_t id = item["ID"].as<int32_t>();
+      for (YAML::const_iterator it_item = item.begin(); it_item != item.end(); it_item++)
       {
-        Motor joint = {name, all_motors.at(i).motor_id};
-        joints.push_back(joint);
-        if (name != "gripper")
+        std::string item_name = it_item->first.as<std::string>();
+        int32_t value = it_item->second.as<int32_t>();
+
+        if (item_name == "ID")
+          continue;
+        if (item_name == "Secondary_ID" && value == 255)
         {
-          joint_ids_write[cntr] = all_motors.at(i).motor_id;
-          cntr++;
+          Motor joint = {name, (uint8_t) id};
+          JointMode jm = {(uint8_t) id, State::NONE};
+          all_joints.push_back(joint);
+          joint_map.insert(std::pair<std::string, JointMode>(name, jm));
+          if (node == dxl_config["order"])
+          {
+            arm_joints.push_back(joint);
+            if (name != "gripper")
+            {
+              joint_ids_write[cntr] = (uint8_t) id;
+              cntr++;
+            }
+          }
         }
+        Info info = {(uint8_t) id, item_name, value};
+        dynamixel_info.push_back(info);
       }
-      Info info = {all_motors.at(i).motor_id, item_name, value};
-      dynamixel_info.push_back(info);
     }
   }
   // Dynamically create an array to hold the IDs of the motors that will be used when reading joint states
-  joint_ids_read = new uint8_t[joints.size()];
-  for (size_t i{0}; i < joints.size(); i++)
-    joint_ids_read[i] = joints.at(i).motor_id;
+  joint_ids_read = new uint8_t[all_joints.size()];
+  for (size_t i{0}; i < all_joints.size(); i++)
+    joint_ids_read[i] = all_joints.at(i).motor_id;
 }
 
 /// @brief Pings all motors to make sure each servo can be found
@@ -516,7 +511,7 @@ bool RobotArm::arm_init_controlItems(void)
   bool result = false;
   const char* log = NULL;
 
-  auto it = joints.begin();
+  auto it = all_joints.begin();
 
   const ControlItem *goal_position = dxl_wb.getItemInfo(it->motor_id, "Goal_Position");
   if (goal_position == NULL) return false;
@@ -637,7 +632,7 @@ bool RobotArm::arm_init_SDK_handlers(void)
 void RobotArm::arm_init_operating_modes(void)
 {
   arm_operating_mode = State::NONE;
-  gripper_operating_mode = State::NONE;
+  joint_map["gripper"].mode = State::NONE;
   std::string arm_mode, gripper_mode;
   int arm_profile_vel, arm_profile_accel;
   int gripper_profile_vel, gripper_profile_accel;
@@ -647,16 +642,23 @@ void RobotArm::arm_init_operating_modes(void)
   ros::param::param<std::string>("~gripper_operating_mode", gripper_mode, "none");
   ros::param::param<int>("~gripper_profile_velocity", gripper_profile_vel, 0);
   ros::param::param<int>("~gripper_profile_acceleration", gripper_profile_accel, 0);
-  arm_set_joint_operating_mode(arm_mode, arm_profile_vel, arm_profile_accel);
-  arm_set_gripper_operating_mode(gripper_mode, gripper_profile_vel, gripper_profile_accel);
+  if (use_arm)
+    arm_set_joint_operating_mode(arm_mode, arm_profile_vel, arm_profile_accel);
+  else
+    arm_set_joint_operating_mode("none");
+
+  if (use_gripper)
+    arm_set_single_joint_operating_mode("gripper", gripper_mode, gripper_profile_vel, gripper_profile_accel);
+  else
+    arm_set_single_joint_operating_mode("gripper", "none");
 }
 
 /// @brief Initialize gripper-related parameters
 /// @details - Used to set correct dimensions for the slider-crank mechanism that operates the gripper
 void RobotArm::arm_init_gripper(void)
 {
-  ros::param::param<bool>("~default_gripper_bar", default_gripper_bar, true);
-  ros::param::param<bool>("~default_gripper_fingers", default_gripper_fingers, true);
+  ros::param::param<bool>("~default_gripper_bar", default_gripper_bar, false);
+  ros::param::param<bool>("~default_gripper_fingers", default_gripper_fingers, false);
 
   if (robot_model.find("300") != std::string::npos)
   {
@@ -671,6 +673,25 @@ void RobotArm::arm_init_gripper(void)
   arm_set_gripper_max_effort();
 }
 
+/// @brief Initialize pid controllers
+/// @details - Used to better track goal positions when doing trajectory control
+void RobotArm::arm_init_pid_controllers(void)
+{
+  ros::param::param<bool>("~use_pid_cntlrs", use_pid_cntlrs, false);
+  if (!use_arm || !use_pid_cntlrs)
+    return;
+
+  std::vector<double> Kp_vec, Ki_vec, Kd_vec, umin_vec, umax_vec;
+  ros::param::get("~Kp_vec", Kp_vec);
+  ros::param::get("~Ki_vec", Ki_vec);
+  ros::param::get("~Kd_vec", Kd_vec);
+  ros::param::get("~umin_vec", umin_vec);
+  ros::param::get("~umax_vec", umax_vec);
+
+  pid_cntlrs.multi_pid_init(joint_num_write, Kp_vec, Ki_vec, Kd_vec, umin_vec, umax_vec);
+  ROS_INFO("Successfully initialized the PID Controllers.");
+}
+
 /// @brief Initialize ROS Publishers
 void RobotArm::arm_init_publishers(void)
 {
@@ -680,17 +701,24 @@ void RobotArm::arm_init_publishers(void)
 /// @brief Initialize ROS Subscribers
 void RobotArm::arm_init_subscribers(void)
 {
-  sub_joint_commands = node.subscribe("joint/commands", 100, &RobotArm::arm_write_joint_commands, this);
-  sub_gripper_command = node.subscribe("gripper/command", 100, &RobotArm::arm_write_gripper_command, this);
-  sub_joint_traj_msg = node.subscribe("arm_controller/joint_trajectory", 100, &RobotArm::arm_joint_trajectory_msg_callback, this);
-  sub_gripper_traj_msg = node.subscribe("gripper_controller/gripper_trajectory", 100, &RobotArm::arm_gripper_trajectory_msg_callback, this);
+  sub_single_joint_command = node.subscribe("single_joint/command", 100, &RobotArm::arm_write_single_joint_command, this);
+  if (use_arm)
+  {
+    sub_joint_commands = node.subscribe("joint/commands", 100, &RobotArm::arm_write_joint_commands, this);
+    sub_joint_traj_msg = node.subscribe("arm_controller/joint_trajectory", 100, &RobotArm::arm_joint_trajectory_msg_callback, this);
+  }
+  if (use_gripper)
+  {
+    sub_gripper_command = node.subscribe("gripper/command", 100, &RobotArm::arm_write_gripper_command, this);
+    sub_gripper_traj_msg = node.subscribe("gripper_controller/gripper_trajectory", 100, &RobotArm::arm_gripper_trajectory_msg_callback, this);
+  }
 }
 
 /// @brief Initialize ROS Services
 void RobotArm::arm_init_services(void)
 {
-  srv_torque_on = node.advertiseService("torque_arm_on", &RobotArm::arm_torque_arm_on, this);
-  srv_torque_off = node.advertiseService("torque_arm_off", &RobotArm::arm_torque_arm_off, this);
+  srv_torque_on = node.advertiseService("torque_joints_on", &RobotArm::arm_torque_joints_on, this);
+  srv_torque_off = node.advertiseService("torque_joints_off", &RobotArm::arm_torque_joints_off, this);
   srv_get_robot_info = node.advertiseService("get_robot_info", &RobotArm::arm_get_robot_info, this);
   srv_operating_mode = node.advertiseService("set_operating_modes", &RobotArm::arm_set_operating_modes, this);
   srv_firmware_gains = node.advertiseService("set_firmware_pid_gains", &RobotArm::arm_set_firmware_pid_gains, this);
@@ -704,15 +732,17 @@ void RobotArm::arm_init_timers(void)
   execute_joint_traj = false;
   execute_gripper_traj = false;
   tmr_joint_states = node.createTimer(ros::Duration(1/timer_hz), &RobotArm::arm_update_joint_states, this);
-  tmr_joint_traj = node.createTimer(ros::Duration(1/timer_hz), &RobotArm::arm_execute_joint_trajectory, this);
-  tmr_gripper_traj = node.createTimer(ros::Duration(1/timer_hz), &RobotArm::arm_execute_gripper_trajectory, this);
+  if (use_arm)
+    tmr_joint_traj = node.createTimer(ros::Duration(1/timer_hz), &RobotArm::arm_execute_joint_trajectory, this);
+  if (use_gripper)
+    tmr_gripper_traj = node.createTimer(ros::Duration(1/timer_hz), &RobotArm::arm_execute_gripper_trajectory, this);
 }
 
 /// @brief Initialize ROS Action Servers if MoveIt is being used
 void RobotArm::arm_init_action_servers(void)
 {
   bool use_moveit;
-  ros::param::param<bool>("~load_moveit_world_frame", use_moveit, false);
+  ros::param::param<bool>("~use_moveit", use_moveit, false);
   if (use_moveit)
   {
     joint_action_server = new actionlib::SimpleActionServer<control_msgs::FollowJointTrajectoryAction>
@@ -778,7 +808,7 @@ void RobotArm::arm_write_joint_commands(const interbotix_sdk::JointCommands &msg
 /// @param msg - accepts either an angular position [rad], linear position [m], velocity [rad/s], or pwm command
 void RobotArm::arm_write_gripper_command(const std_msgs::Float64 &msg)
 {
-  switch(gripper_operating_mode)
+  switch(joint_map["gripper"].mode)
   {
     case State::POSITION:
     {
@@ -787,22 +817,22 @@ void RobotArm::arm_write_gripper_command(const std_msgs::Float64 &msg)
     }
     case State::EXT_POSITION:
     {
-      arm_set_gripper_angular_position(msg.data);
+      arm_set_single_joint_angular_position("gripper", msg.data);
       break;
     }
     case State::VELOCITY:
     {
-      arm_set_gripper_velocity(msg.data);
+      arm_set_single_joint_velocity("gripper", msg.data);
       break;
     }
     case State::CURRENT:
     {
-      arm_set_gripper_current(msg.data);
+      arm_set_single_joint_current("gripper", msg.data);
       break;
     }
     case State::PWM:
     {
-      arm_set_gripper_pwm((int32_t) msg.data);
+      arm_set_single_joint_pwm("gripper", (int32_t) msg.data);
       break;
     }
     case State::NONE:
@@ -813,6 +843,45 @@ void RobotArm::arm_write_gripper_command(const std_msgs::Float64 &msg)
     default:
     {
       ROS_ERROR("Invalid gripper control mode.");
+    }
+  }
+}
+
+/// @brief ROS Subscriber callback function to write any type of command to a specified joint
+/// @param msg - accepts either an angular position [rad], velocity [rad/s], current [mA], or pwm command
+void RobotArm::arm_write_single_joint_command(const interbotix_sdk::SingleCommand &msg)
+{
+  switch(joint_map[msg.joint_name].mode)
+  {
+    case State::POSITION:
+    case State::EXT_POSITION:
+    {
+      arm_set_single_joint_angular_position(msg.joint_name, msg.cmd);
+      break;
+    }
+    case State::VELOCITY:
+    {
+      arm_set_single_joint_velocity(msg.joint_name, msg.cmd);
+      break;
+    }
+    case State::CURRENT:
+    {
+      arm_set_single_joint_current(msg.joint_name, msg.cmd);
+      break;
+    }
+    case State::PWM:
+    {
+      arm_set_single_joint_pwm(msg.joint_name, (int32_t) msg.cmd);
+      break;
+    }
+    case State::NONE:
+    {
+      ROS_WARN("%s control mode not set.", msg.joint_name.c_str());
+      break;
+    }
+    default:
+    {
+      ROS_ERROR("Invalid %s control mode.", msg.joint_name.c_str());
     }
   }
 }
@@ -837,7 +906,7 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
     jnt_tra_msg.joint_names.clear();
     jnt_tra_msg.points.clear();
     jnt_tra_msg.header = msg.header;
-    for (auto const& joint:joints)
+    for (auto const& joint:arm_joints)
       jnt_tra_msg.joint_names.push_back(joint.name);
 
     cntr = 0;
@@ -845,7 +914,7 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
     {
       trajectory_msgs::JointTrajectoryPoint jnt_tra_point_msg;
       jnt_tra_point_msg.time_from_start = msg.points.at(cntr).time_from_start;
-      for (auto const& joint:joints)
+      for (auto const& joint:arm_joints)
       {
         jnt_tra_point_msg.positions.push_back(msg.points.at(cntr).positions.at(joint_order[joint.name]));
         jnt_tra_point_msg.velocities.push_back(msg.points.at(cntr).velocities.at(joint_order[joint.name]));
@@ -857,7 +926,7 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
     // Make sure that the initial joint positions in the trajectory match the current
     // joint states (with an arbitrary error less than 0.1 rad)
     size_t itr = 0;
-    for (auto const& joint:joints)
+    for (auto const& joint:arm_joints)
     {
       if (joint.name != "gripper")
       {
@@ -893,11 +962,11 @@ void RobotArm::arm_gripper_trajectory_msg_callback(const trajectory_msgs::JointT
     // Make sure that the initial gripper position in the trajectory matches the current
     // gripper position (with an arbitrary error less than 0.1 rad)
     // Note that MoveIt sends the desired position of the 'left_finger_link'. In the joint_states message,
-    // this is located right after the gripper position in radians (conveniently, this index matches joints.size())
-    if (!(fabs(gripper_tra_msg.points.at(0).positions.at(0) - joint_states.position.at(joints.size())) < 0.1))
+    // this is located right after the gripper position in radians (conveniently, this index matches arm_joints.size())
+    if (!(fabs(gripper_tra_msg.points.at(0).positions.at(0) - joint_states.position.at(arm_joints.size())) < 0.1))
     {
-      ROS_WARN("%s motor is not at the correct initial state.", gripper.name.c_str());
-      ROS_WARN("Expected state: %f, Actual State: %f.", gripper_tra_msg.points.at(0).positions.at(0), joint_states.position.at(joints.size()));
+      ROS_WARN("Gripper motor is not at the correct initial state.");
+      ROS_WARN("Expected state: %f, Actual State: %f.", gripper_tra_msg.points.at(0).positions.at(0), joint_states.position.at(arm_joints.size()));
     }
 
     ROS_INFO("Succeeded to get gripper trajectory!");
@@ -910,19 +979,19 @@ void RobotArm::arm_gripper_trajectory_msg_callback(const trajectory_msgs::JointT
   }
 }
 
-/// @brief ROS Service to torque on the arm motors
+/// @brief ROS Service to torque on all joints
 /// @param req - Empty message
 /// @param res [out] - Empty message
-bool RobotArm::arm_torque_arm_on(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+bool RobotArm::arm_torque_joints_on(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
   arm_torque_on();
   return true;
 }
 
-/// @brief ROS Service to torque off the arm motors
+/// @brief ROS Service to torque off all joints
 /// @param req - Empty message
 /// @param res [out] - Empty message
-bool RobotArm::arm_torque_arm_off(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+bool RobotArm::arm_torque_joints_off(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
   arm_torque_off();
   return true;
@@ -936,7 +1005,7 @@ bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, inter
   // Parse the urdf model to get joint position and velocity limits
   urdf::Model model;
   model.initParam(robot_name + "/robot_description");
-  for (auto const& joint:joints)
+  for (auto const& joint:all_joints)
   {
     urdf::JointConstSharedPtr ptr;
     if (joint.name == "gripper" && default_gripper_bar && default_gripper_fingers)
@@ -960,6 +1029,7 @@ bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, inter
   res.home_pos = arm_poses::home_positions.at(robot_model);
   res.sleep_pos = arm_poses::sleep_positions.at(robot_model);
   res.num_joints = joint_num_write;
+  res.num_single_joints = all_joints.size();
   return true;
 }
 
@@ -969,23 +1039,34 @@ bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, inter
 bool RobotArm::arm_set_operating_modes(interbotix_sdk::OperatingModes::Request &req, interbotix_sdk::OperatingModes::Response &res)
 {
   bool result = true;
-  if (!req.arm_mode.empty())
+  if (req.cmd == interbotix_sdk::OperatingModes::Request::GRIPPER || req.cmd == interbotix_sdk::OperatingModes::Request::ARM_JOINTS_AND_GRIPPER)
   {
-    if (req.use_custom_arm_profiles)
-      result = arm_set_joint_operating_mode(req.arm_mode, req.arm_profile_velocity, req.arm_profile_acceleration);
+    if (req.use_custom_profiles)
+      result = arm_set_single_joint_operating_mode("gripper", req.mode, req.profile_velocity, req.profile_acceleration);
     else
-      result = arm_set_joint_operating_mode(req.arm_mode);
+      result = arm_set_single_joint_operating_mode("gripper", req.mode);
   }
 
   if (!result)
     return false;
 
-  if (!req.gripper_mode.empty())
+  if (req.cmd == interbotix_sdk::OperatingModes::Request::ARM_JOINTS_AND_GRIPPER || req.cmd == interbotix_sdk::OperatingModes::Request::ARM_JOINTS)
   {
-    if (req.use_custom_gripper_profiles)
-      result = arm_set_gripper_operating_mode(req.gripper_mode, req.gripper_profile_velocity, req.gripper_profile_acceleration);
+    if (req.use_custom_profiles)
+      result = arm_set_joint_operating_mode(req.mode, req.profile_velocity, req.profile_acceleration);
     else
-      result = arm_set_gripper_operating_mode(req.gripper_mode);
+      result = arm_set_joint_operating_mode(req.mode);
+  }
+
+  if (!result)
+    return false;
+
+  if (req.cmd == interbotix_sdk::OperatingModes::Request::SINGLE_JOINT)
+  {
+    if (req.use_custom_profiles)
+      result = arm_set_single_joint_operating_mode(req.joint_name, req.mode, req.profile_velocity, req.profile_acceleration);
+    else
+      result = arm_set_single_joint_operating_mode(req.joint_name, req.mode);
   }
 
   if (!result)
@@ -1006,7 +1087,7 @@ bool RobotArm::arm_set_firmware_pid_gains(interbotix_sdk::FirmwareGains::Request
   // if joint_id == 0, then modify PID gains for all motors
   if (req.joint_id == 0)
   {
-    for (auto const& joint:joints)
+    for (auto const& joint:all_joints)
       ids.push_back(joint.motor_id);
   }
   else
@@ -1125,7 +1206,7 @@ bool RobotArm::arm_set_firmware_register_values(interbotix_sdk::RegisterValues::
   {
     uint8_t id = req.id;
     if (req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
-      id = gripper.motor_id;
+      id = joint_map["gripper"].motor_id;
     result = dxl_wb.itemWrite(id, req.addr_name.c_str(), req.value, &log);
     if (result == false)
     {
@@ -1136,7 +1217,7 @@ bool RobotArm::arm_set_firmware_register_values(interbotix_sdk::RegisterValues::
   }
   else if (req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS_AND_GRIPPER || req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS)
   {
-    for (auto const& joint: joints)
+    for (auto const& joint: arm_joints)
     {
       if (joint.name != "gripper" || joint.name == "gripper" && req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS_AND_GRIPPER)
       {
@@ -1166,7 +1247,7 @@ bool RobotArm::arm_get_firmware_register_values(interbotix_sdk::RegisterValues::
   {
     uint8_t id = req.id;
     if (req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
-      id = gripper.motor_id;
+      id = joint_map["gripper"].motor_id;
     result = dxl_wb.itemRead(id, req.addr_name.c_str(), &value, &log);
     if (result == false)
     {
@@ -1178,7 +1259,7 @@ bool RobotArm::arm_get_firmware_register_values(interbotix_sdk::RegisterValues::
   }
   else if (req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS_AND_GRIPPER || req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS)
   {
-    for (auto const& joint: joints)
+    for (auto const& joint: arm_joints)
     {
       if (joint.name != "gripper" || joint.name == "gripper" && req.cmd == interbotix_sdk::RegisterValues::Request::ARM_JOINTS_AND_GRIPPER)
       {
@@ -1204,21 +1285,21 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
 
   sensor_msgs::JointState joint_state_msg;
 
-  int32_t get_current[joints.size()];
-  int32_t get_velocity[joints.size()];
-  int32_t get_position[joints.size()];
+  int32_t get_current[all_joints.size()];
+  int32_t get_velocity[all_joints.size()];
+  int32_t get_position[all_joints.size()];
 
   if (dxl_wb.getProtocolVersion() == 2.0f)
   {
 
     result = dxl_wb.syncRead(SYNC_READ_HANDLER_FOR_PRESENT_POSITION_VELOCITY_CURRENT,
                                 joint_ids_read,
-                                joints.size(),
+                                all_joints.size(),
                                 &log);
     arm_check_error(result, &log);
     result = dxl_wb.getSyncReadData(SYNC_READ_HANDLER_FOR_PRESENT_POSITION_VELOCITY_CURRENT,
                                                   joint_ids_read,
-                                                  joints.size(),
+                                                  all_joints.size(),
                                                   control_items["Present_Current"]->address,
                                                   control_items["Present_Current"]->data_length,
                                                   get_current,
@@ -1226,7 +1307,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
     arm_check_error(result, &log);
     result = dxl_wb.getSyncReadData(SYNC_READ_HANDLER_FOR_PRESENT_POSITION_VELOCITY_CURRENT,
                                                   joint_ids_read,
-                                                  joints.size(),
+                                                  all_joints.size(),
                                                   control_items["Present_Velocity"]->address,
                                                   control_items["Present_Velocity"]->data_length,
                                                   get_velocity,
@@ -1234,7 +1315,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
     arm_check_error(result, &log);
     result = dxl_wb.getSyncReadData(SYNC_READ_HANDLER_FOR_PRESENT_POSITION_VELOCITY_CURRENT,
                                                   joint_ids_read,
-                                                  joints.size(),
+                                                  all_joints.size(),
                                                   control_items["Present_Position"]->address,
                                                   control_items["Present_Position"]->data_length,
                                                   get_position,
@@ -1242,7 +1323,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
     arm_check_error(result, &log);
 
     uint8_t index = 0;
-    for(auto const& joint:joints)
+    for(auto const& joint:all_joints)
     {
       double position = 0.0;
       double velocity = 0.0;
@@ -1265,6 +1346,11 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
         position = arm_calculate_gripper_linear_position(position);
         joint_state_msg.position.push_back(position);
         joint_state_msg.position.push_back(-position);
+        // put a '0' placeholder in the velocity and effort fields for the fingers as well
+        joint_state_msg.velocity.push_back(0);
+        joint_state_msg.velocity.push_back(0);
+        joint_state_msg.effort.push_back(0);
+        joint_state_msg.effort.push_back(0);
       }
       index++;
     }
@@ -1276,7 +1362,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
                               control_items["Present_Current"]->data_length;
     uint32_t get_all_data[length_of_data];
 
-    for (auto const& joint:joints)
+    for (auto const& joint:all_joints)
     {
       result = dxl_wb.readRegister(joint.motor_id,
                                      control_items["Present_Position"]->address,
@@ -1310,6 +1396,11 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
         position = arm_calculate_gripper_linear_position(position);
         joint_state_msg.position.push_back(position);
         joint_state_msg.position.push_back(-position);
+        // put a '0' placeholder in the velocity and effort fields for the fingers as well
+        joint_state_msg.velocity.push_back(0);
+        joint_state_msg.velocity.push_back(0);
+        joint_state_msg.effort.push_back(0);
+        joint_state_msg.effort.push_back(0);
       }
     }
   }
@@ -1339,6 +1430,9 @@ void RobotArm::arm_execute_joint_trajectory(const ros::TimerEvent&)
         // They just remain at their last commanded positions.
         double vel_array[joint_num_write] = {0};
         arm_set_joint_velocities(vel_array);
+        // if doing pid control, clear the pid errors
+        if (use_pid_cntlrs)
+          pid_cntlrs.multi_pid_clear();
       }
       ROS_INFO("Joint Trajectory stopped.");
       // Reset counter to 0 so the function is ready to start a new trajectory
@@ -1365,15 +1459,29 @@ void RobotArm::arm_execute_joint_trajectory(const ros::TimerEvent&)
       // If the current operating mode is velocity control...
       if (arm_operating_mode == State::VELOCITY)
       {
-        // ...then command the desired velocities from the waypoint message
-        uint8_t counter = 0;
-        double vel_array[joint_num_write];
-        for (auto const& vel:jnt_tra_msg.points[cntr].velocities)
+        // If you do not want to do velocity-based-position-control on the desired trajectory positions
+        // and instead just want to send the velocities in the trajectory message...
+        if (!use_pid_cntlrs)
         {
-          vel_array[counter] = vel;
-          counter++;
+          // ...then command the desired velocities from the waypoint message
+          uint8_t counter = 0;
+          double vel_array[joint_num_write];
+          for (auto const& vel:jnt_tra_msg.points[cntr].velocities)
+          {
+            vel_array[counter] = vel;
+            counter++;
+          }
+          arm_set_joint_velocities(vel_array);
         }
-        arm_set_joint_velocities(vel_array);
+        // If you want to do velocity-based-position-control on the desired trajectory positions, then
+        // set the reference or 'goal' positions for all the joints and use the desired 'goal' velocities
+        // as feed-forward terms in the controllers. Then clear the pid errors since new reference positions have been set
+        else
+        {
+          pid_cntlrs.multi_pid_set_refs(jnt_tra_msg.points[cntr].positions);
+          pid_cntlrs.multi_pid_set_ffs(jnt_tra_msg.points[cntr].velocities);
+          pid_cntlrs.multi_pid_clear();
+        }
       }
       // ...otherwise command the desired positions from the waypoint message
       else if (arm_operating_mode == State::POSITION)
@@ -1395,7 +1503,23 @@ void RobotArm::arm_execute_joint_trajectory(const ros::TimerEvent&)
       // Stop the timer from executing commands and reset 'cntr'
       execute_joint_traj = false;
       cntr = 0;
+      // if using pid control, clear the pid errors and stop all motion
+      if (use_pid_cntlrs && arm_operating_mode == State::VELOCITY)
+        pid_cntlrs.multi_pid_clear();
+        double vel_array[joint_num_write] = {0};
+        arm_set_joint_velocities(vel_array);
     }
+  }
+  // for every iteration through the timer callback, calculate and output the corrected
+  // velocities from the controller
+  if (use_pid_cntlrs && arm_operating_mode == State::VELOCITY && cntr > 0)
+  {
+    std::vector<double> arm_joint_states;
+    double vel_array[joint_num_write];
+    for (size_t i{0}; i < joint_num_write; i++)
+      arm_joint_states.push_back(joint_states.position.at(i));
+    pid_cntlrs.multi_pid_compute_control(vel_array, arm_joint_states);
+    arm_set_joint_velocities(vel_array);
   }
 }
 
@@ -1539,83 +1663,62 @@ bool RobotArm::arm_set_joint_operating_mode(const std::string arm_mode, const in
 {
   bool arm_mode_set = true;
   if (arm_mode == "position")
-  {
     arm_set_joints_to_position_control(profile_vel, profile_accel);
-    arm_operating_mode = State::POSITION;
-  }
   else if (arm_mode == "velocity")
-  {
     arm_set_joints_to_velocity_control(profile_accel);
-    arm_operating_mode = State::VELOCITY;
-  }
   else if (arm_mode == "current")
-  {
     arm_set_joints_to_current_control();
-    arm_operating_mode = State::CURRENT;
-  }
   else if (arm_mode == "pwm")
-  {
     arm_set_joints_to_pwm_control();
-    arm_operating_mode = State::PWM;
-  }
   else if (arm_mode == "none")
   {
     arm_operating_mode = State::NONE;
-    ROS_INFO("Arm Joint control is set to None.");
+    ROS_INFO("Arm joint control is set to None.");
   }
   else
     arm_mode_set = false;
 
-  if (!arm_mode_set)
+  if (arm_mode_set)
+  {
+    for (auto &joint : arm_joints)
+      joint_map[joint.name].mode = arm_operating_mode;
+  }
+  else
     ROS_ERROR("Invalid control mode for the arm joints.");
 
   return arm_mode_set;
 }
 
-/// @brief Sets the operating mode for the gripper motor only
-/// @param gripper_mode - specified mode like "position", "ext_position", "velocity", and "pwm"
-/// @param profile_vel - register value that sets the max velocity for the motor if using the "position" or "ext_position" operating modes
-/// @param profile_accel - register value that sets the max acceleration for the motor if using the "position" or "ext_position" operating modes
-bool RobotArm::arm_set_gripper_operating_mode(std::string gripper_mode, const int32_t profile_vel, const int32_t profile_accel)
+/// @brief Sets the operating mode for an individual joint only
+/// @param joint_name - name of the joint for which to change the operating mode
+/// @param mode - specified mode like "position", "ext_position", "velocity", and "pwm"
+/// @param profile_vel - register value that sets the max velocity for the joint if using the "position" or "ext_position" operating modes
+/// @param profile_accel - register value that sets the max acceleration for the joint if using the "position", "ext_position", or "velocity" operating modes
+bool RobotArm::arm_set_single_joint_operating_mode(std::string joint_name, std::string mode, const int32_t profile_vel, const int32_t profile_accel)
 {
-  bool gripper_mode_set = true;
-  if (gripper_mode == "position")
+  bool single_mode_set = true;
+  if (mode == "position")
+    arm_set_single_joint_to_position_control(joint_name, profile_vel, profile_accel);
+  else if (mode == "ext_position")
+    arm_set_single_joint_to_ext_position_control(joint_name, profile_vel, profile_accel);
+  else if (mode == "velocity")
+    arm_set_single_joint_to_velocity_control(joint_name, profile_accel);
+  else if (mode == "current")
+    arm_set_single_joint_to_current_control(joint_name);
+  else if (mode == "pwm")
+    arm_set_single_joint_to_pwm_control(joint_name);
+  else if (mode == "none")
   {
-    arm_set_gripper_to_position_control(profile_vel, profile_accel);
-    gripper_operating_mode = State::POSITION;
-  }
-  else if (gripper_mode == "ext_position")
-  {
-    arm_set_gripper_to_ext_position_control(profile_vel, profile_accel);
-    gripper_operating_mode = State::EXT_POSITION;
-  }
-  else if (gripper_mode == "velocity")
-  {
-    arm_set_gripper_to_velocity_control(profile_accel);
-    gripper_operating_mode = State::VELOCITY;
-  }
-  else if (gripper_mode == "current")
-  {
-    arm_set_gripper_to_current_control();
-    gripper_operating_mode = State::CURRENT;
-  }
-  else if (gripper_mode == "pwm")
-  {
-    arm_set_gripper_to_pwm_control();
-    gripper_operating_mode = State::PWM;
-  }
-  else if (gripper_mode == "none")
-  {
-    gripper_operating_mode = State::NONE;
-    ROS_INFO("Gripper control is set to None.");
+    joint_map[joint_name].mode = State::NONE;
+    ROS_INFO("%s control is set to None.", joint_name.c_str());
   }
   else
-    gripper_mode_set = false;
+    single_mode_set = false;
 
-  if (!gripper_mode_set)
-    ROS_ERROR("Invalid control mode for the gripper.");
+  if (!single_mode_set)
+    ROS_ERROR("Invalid control mode for the %s joint.", joint_name.c_str());
 
-  return gripper_mode_set;
+  return single_mode_set;
 }
 
 /// @brief Calculates the linear distance in meters between the gripper fingers given a servo angle

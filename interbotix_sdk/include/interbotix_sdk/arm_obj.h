@@ -16,9 +16,11 @@
 #include "interbotix_sdk/OperatingModes.h"
 #include "interbotix_sdk/RegisterValues.h"
 #include "interbotix_sdk/JointCommands.h"
+#include "interbotix_sdk/SingleCommand.h"
 #include "interbotix_sdk/FirmwareGains.h"
 #include "interbotix_sdk/RobotInfo.h"
 #include "interbotix_sdk/arm_poses.h"
+#include "interbotix_sdk/pid.h"
 
 #define BAUDRATE 1000000                                                // All motors are preset to 1M baud
 #define PORT "/dev/ttyDXL"                                              // Udev rule creates a symlink with this name
@@ -40,10 +42,26 @@ static const float HORN_RADIUS_300 = 0.022;                             // Dista
 static const float ARM_RADIUS_300 = 0.036;                              // Length of the 'swing arm' that connects the edge of the servo horn to a gripper finger for the XX300 models
 static const float PI = 3.14159265358979f;                              // Defines Pi
 
+enum class State                                                        // Operating_Mode state to keep track of the arm joints and gripper operating modes
+{
+  NONE,                                                                 // When in this state, all motor commands will be ignored
+  POSITION,                                                             // When in this state, all commands will be treated as goal positions (cannot go past 1 revolution)
+  EXT_POSITION,                                                         // When in this state, all commands will be treated as goal positions (multiple revolutions allowed)
+  VELOCITY,                                                             // When in this state, all commands will be treated as goal velocities [rad/s]
+  CURRENT,                                                              // When in this state, all commands will be treated as goal currents [mA]
+  PWM                                                                   // When in this state, all commands will be treated as goal pwms
+};
+
 struct Motor
 {
   std::string name;                                                     // Name of a motor (as defined in a robot-specific config file located in the interbotix_sdk/config directory)
   uint8_t motor_id;                                                     // Dynamixel ID corresponding the above motor name
+};
+
+struct JointMode
+{
+  uint8_t motor_id;
+  State mode;
 };
 
 struct Info
@@ -51,16 +69,6 @@ struct Info
   uint8_t motor_id;                                                     // Dynamixel ID of a motor
   std::string item_name;                                                // Register name
   int32_t value;                                                        // Value to write to the above register for the specified motor
-};
-
-enum class State                                                        // Operating_Mode state to keep track of the arm joints and gripper operating modes
-{
-  NONE,                                                                 // When in this state, all motor commands will be ignored
-  POSITION,                                                             // When in this state, all commands will be treated as goal positions (cannot go past 1 revolution)
-  EXT_POSITION,                                                         // When in this state, all commands will be treated as goal positions (multiple revolutions allowed) - gripper support only
-  VELOCITY,                                                             // When in this state, all commands will be treated as goal velocities [rad/s]
-  CURRENT,                                                              // When in this state, all commands will be treated as goal currents [mA]
-  PWM                                                                   // When in this state, all commands will be treated as goal pwms
 };
 
 class RobotArm
@@ -103,46 +111,55 @@ public:
     /// @param joint_pwms - array of joint pwms to write to the motors; sequence of pwms match the joint name order in the published joint_state messages
     void arm_set_joint_pwms(int32_t joint_pwms[]);
 
-    /// @brief Set operating mode for the gripper to position [rad] control
-    /// @param joint_profile_vel - max angular velocity that the gripper motor is allowed to reach - uses register values
-    /// @param joint_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-    void arm_set_gripper_to_position_control(const int32_t joint_profile_vel = JOINT_PROFILE_VELOCITY, const int32_t joint_profile_accel = JOINT_PROFILE_ACCELERATION);
+    /// @brief Set operating mode for the specified joint to position [rad] control
+    /// @param joint_name - name of the joint for which the operating mode will be changed
+    /// @param joint_profile_vel - max angular velocity that the specified joint is allowed to reach - uses register values
+    /// @param joint_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+    void arm_set_single_joint_to_position_control(const std::string joint_name, const int32_t joint_profile_vel = JOINT_PROFILE_VELOCITY, const int32_t joint_profile_accel = JOINT_PROFILE_ACCELERATION);
 
-    /// @brief Set operating mode for the gripper to ext_position [rad] control (servo can perform multiple turns instead of only one revolution)
-    /// @param joint_profile_vel - max angular velocity that the gripper motor is allowed to reach - uses register values
-    /// @param joint_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-    /// @details - this mode should only be used with a custom gripper that has the ability to freely rotate
-    void arm_set_gripper_to_ext_position_control(const int32_t joint_profile_vel = JOINT_PROFILE_VELOCITY, const int32_t joint_profile_accel = JOINT_PROFILE_ACCELERATION);
+    /// @brief Set operating mode for the specified joint to ext_position [rad] control (servo can perform multiple turns instead of only one revolution)
+    /// @param joint_name - name of the joint for which the operating mode will be changed
+    /// @param joint_profile_vel - max angular velocity that the specified joint is allowed to reach - uses register values
+    /// @param joint_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+    /// @details - this mode should only be used with a joint that has the ability to freely rotate
+    void arm_set_single_joint_to_ext_position_control(const std::string joint_name, const int32_t joint_profile_vel = JOINT_PROFILE_VELOCITY, const int32_t joint_profile_accel = JOINT_PROFILE_ACCELERATION);
 
-    /// @brief Set operating mode for the gripper to velocity [rad/s] control
-    /// @param wheel_profile_accel - max acceleration that the gripper motor is allowed to reach - uses register values
-    void arm_set_gripper_to_velocity_control(const int32_t wheel_profile_accel = WHEEL_PROFILE_ACCELERATION);
+    /// @brief Set operating mode for the specified joint to velocity [rad/s] control
+    /// @param joint_name - name of the joint for which the operating mode will be changed
+    /// @param wheel_profile_accel - max acceleration that the specified joint is allowed to reach - uses register values
+    void arm_set_single_joint_to_velocity_control(const std::string joint_name, const int32_t wheel_profile_accel = WHEEL_PROFILE_ACCELERATION);
 
-    /// @brief Set operating mode for the gripper to current [mA] control (Viper robots only)
-    void arm_set_gripper_to_current_control(void);
+    /// @brief Set operating mode for the specified joint to current [mA] control
+    /// @param joint_name - name of the joint for which the operating mode will be changed
+    void arm_set_single_joint_to_current_control(const std::string joint_name);
 
-    /// @brief Set operating mode for the gripper to pwm control
-    void arm_set_gripper_to_pwm_control(void);
+    /// @brief Set operating mode for the specified joint to pwm control
+    /// @param joint_name - name of the joint for which the operating mode will be changed
+    void arm_set_single_joint_to_pwm_control(const std::string joint_name);
 
     /// @brief Set gripper finger position
     /// @param dist - desired distance [m] between the gripper fingers
     void arm_set_gripper_linear_position(const float dist);
 
-    /// @brief Set gripper angle
-    /// @param horn_angle - desired gripper angular position [rad]
-    void arm_set_gripper_angular_position(const float horn_angle);
+    /// @brief Set the angular position for the specified joint
+    /// @param joint_name - name of the joint to command
+    /// @param horn_angle - desired angular position [rad]
+    void arm_set_single_joint_angular_position(const std::string joint_name, const float horn_angle);
 
-    /// @brief Set gripper velocity
-    /// @param vel - desired gripper angular velocity [rad/s]
-    void arm_set_gripper_velocity(const float vel);
+    /// @brief Set the velocity for the specified joint
+    /// @param joint_name - name of the joint to command
+    /// @param vel - desired angular velocity [rad/s]
+    void arm_set_single_joint_velocity(const std::string joint_name, const float vel);
 
-    /// @brief Set gripper current
-    /// @param current - desired gripper current [mA]
-    void arm_set_gripper_current(const float current);
+    /// @brief Set the current for the specified joint
+    /// @param joint_name - name of the joint to command
+    /// @param current - desired current [mA]
+    void arm_set_single_joint_current(const std::string joint_name, const float current);
 
-    /// @brief Set gripper pwm
+    /// @brief Set the pwm for the specified joint
+    /// @param joint_name - name of the joint to command
     /// @param pwm - desired pwm - values between 150-350 (or the negative equiavlent) seem to work best
-    void arm_set_gripper_pwm(int32_t pwm);
+    void arm_set_single_joint_pwm(const std::string joint_name, int32_t pwm);
 
     /// @brief Set max gripper effort
     /// @param max_effort - the max effort [mA] that the gripper Action server will allow before preempting
@@ -161,13 +178,14 @@ private:
     ros::Subscriber sub_gripper_traj_msg;                                                             // Subscribes to the gripper trajectory topic
     ros::Subscriber sub_joint_commands;                                                               // Subscribes to the joint commands topic (excludes gripper)
     ros::Subscriber sub_gripper_command;                                                              // Subscribes to the gripper command topic
+    ros::Subscriber sub_single_joint_command;                                                         // Subscribes to the single joint topic
     ros::ServiceServer srv_firmware_gains;                                                            // Service to set PID firmware gains for the motors
     ros::ServiceServer srv_operating_mode;                                                            // Service to set the operating modes for the motors
     ros::ServiceServer srv_set_register;                                                              // Service to set multiple motor registers
     ros::ServiceServer srv_get_register;                                                              // Service to get raw values from multiple motor registers
     ros::ServiceServer srv_get_robot_info;                                                            // Service to get information about the robot arm
-    ros::ServiceServer srv_torque_on;                                                                 // Service to torque on the robot arm's motors
-    ros::ServiceServer srv_torque_off;                                                                // Service to torque off the robot arm's motors
+    ros::ServiceServer srv_torque_on;                                                                 // Service to torque on the robot's motors
+    ros::ServiceServer srv_torque_off;                                                                // Service to torque off the robot's motors
     ros::Timer tmr_joint_states;                                                                      // Timer to continuously publish the joint states
     ros::Timer tmr_joint_traj;                                                                        // Timer that writes joint commands to the motors (excludes gripper) based on a given trajectory
     ros::Timer tmr_gripper_traj;                                                                      // Timer that writes a command to the gripper motor based on a given trajectory
@@ -186,16 +204,20 @@ private:
     const std::string robot_model;                              // Model type of the robot (ex. wx200)
 
     State arm_operating_mode;                                   // Arm operating mode (either position [rad], velocity [rad/s], current [mA], pwm, or none)
-    std::vector<Motor> joints;                                  // Vector of all joint names (including  gripper) and their corresponding Dynamixel IDs; shadow motors are not included
-    std::vector<Motor> all_motors;                              // Vector of all motor names (as specified by the 'order' sequence in the config file) and their corresponding IDs (includes shadow motors)
+    MultiPID pid_cntlrs;                                        // Object that contains the controllers for the arm joints - used to better track goal positions when doing trajectory control
+    std::vector<Motor> arm_joints;                              // Vector of all arm joint names (including  gripper) and their corresponding Dynamixel IDs; shadow and 'single' motors are not included
+    std::vector<Motor> arm_motors;                              // Vector of all arm motor names (as specified by the 'order' sequence in the config file) and their corresponding IDs (includes shadow motors but excludeds 'single' motors)
+    std::vector<Motor> all_joints;                              // Vector of all joint names (including gripper and 'single' joints) and their corresponding IDs (not including shadow motors)
+    std::vector<Motor> all_motors;                              // Vector of all motor names (including gripper, shadow motors, and 'single' joints) and their corresponding IDs
+    std::map<std::string, JointMode> joint_map;                 // Maps all joint names (including gripper and 'single' joints) to their Dynamixel IDs and operating modes
     uint8_t *joint_ids_read;                                    // Pointer to first element in a dynamic array of joint IDs (as specified in the 'joints' vector above) to read joint states
     uint8_t *joint_ids_write;                                   // Pointer to first element in a dynamic array of joint IDs (as specified in the 'joints' vector above - excluding gripper) to write joint commands
     size_t joint_num_write;                                     // Number of elements in 'joint_ids_write'
     double joint_start_time;                                    // ROS start time for a joint trajectory (excludes gripper)
     bool execute_joint_traj;                                    // True if the joint trajectory should be executed - False otherwise
+    bool use_pid_cntlrs;                                        // True if velocity-based-position-control should be done when executing joint trajectories
+    bool use_arm;                                               // True if a robot arm exists - False otherwise
 
-    State gripper_operating_mode;                               // Gripper operating mode (either position [rad], ext_position [rad], velocity [rad/s], current [mA], pwm, or none)
-    Motor gripper;                                              // Motor instance with the name of the gripper and its corresponding Dynamixel ID
     double horn_radius;                                         // Distance [m] from the gripper servo center to the end of the servo horn (1st link in slider-crank mechanism to drive the gripper fingers)
     double arm_radius;                                          // Distance [m] from the end of the 1st link to the gripper finger attachment point (2nd link in slider-crank mechanism to drive the gripper fingers)
     double gripper_effort;                                      // Current gripper effort in mA
@@ -204,7 +226,7 @@ private:
     bool execute_gripper_traj;                                  // True if the gripper trajectory should be executed - False otherwise
     bool default_gripper_bar;                                   // True if the gripper_bar_link in the URDF was loaded - False otherwise
     bool default_gripper_fingers;                               // True if the gripper fingers in the URDF were loaded - False otherwise
-
+    bool use_gripper;                                           // True if the 'gripper' motor exists in the motor config file - False otherwise
 
     /// @brief Initializes the port to talk to the Dynamixel motors
     void arm_init_port();
@@ -241,6 +263,10 @@ private:
     /// @details - Used to set correct dimensions for the slider-crank mechanism that operates the gripper
     void arm_init_gripper(void);
 
+    /// @brief Initialize pid controllers
+    /// @details - Used to better track goal positions when doing trajectory control
+    void arm_init_pid_controllers(void);
+
     /// @brief Initialize ROS Publishers
     void arm_init_publishers(void);
 
@@ -264,6 +290,10 @@ private:
     /// @param msg - accepts either an angular position [rad], linear position [m], velocity [rad/s], current [mA], or pwm command
     void arm_write_gripper_command(const std_msgs::Float64 &msg);
 
+    /// @brief ROS Subscriber callback function to write any type of command to a specified joint
+    /// @param msg - accepts either an angular position [rad], velocity [rad/s], current [mA], or pwm command
+    void arm_write_single_joint_command(const interbotix_sdk::SingleCommand &msg);
+
     /// @brief ROS Subscriber callback function to a user-provided joint trajectory for the arm (excludes gripper)
     /// @param msg - user-provided joint trajectory using the trajectory_msgs::JointTrajectory message type
     void arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTrajectory &msg);
@@ -273,15 +303,15 @@ private:
     /// @details - Commands should only be for the 'left_finger' joint and must specify half the desired distance between the fingers
     void arm_gripper_trajectory_msg_callback(const trajectory_msgs::JointTrajectory &msg);
 
-    /// @brief ROS Service to torque on the arm motors
+    /// @brief ROS Service to torque on all joints
     /// @param req - Empty message
     /// @param res [out] - Empty message
-    bool arm_torque_arm_on(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    bool arm_torque_joints_on(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
-    /// @brief ROS Service to torque off the arm motors
+    /// @brief ROS Service to torque off all joints
     /// @param req - Empty message
     /// @param res [out] - Empty message
-    bool arm_torque_arm_off(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    bool arm_torque_joints_off(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
     /// @brief ROS Service that allows the user to get information about the robot
     /// @param req - custom message of type 'RobotInfo'. Look at the service message for details
@@ -331,13 +361,14 @@ private:
     /// @param arm_mode - specified mode like "position", "velocity", "current", and "pwm"
     /// @param profile_vel - register value that sets the max velocity for the motors if using the "position" operating mode
     /// @param profile_accel - register value that sets the max acceleration for the motors if using the "position" operating mode
-    bool arm_set_joint_operating_mode(std::string arm_mode, const int32_t profile_vel = JOINT_PROFILE_VELOCITY, const int32_t profile_accel = JOINT_PROFILE_ACCELERATION);
+    bool arm_set_joint_operating_mode(const std::string arm_mode, const int32_t profile_vel = JOINT_PROFILE_VELOCITY, const int32_t profile_accel = JOINT_PROFILE_ACCELERATION);
 
-    /// @brief Sets the operating mode for the gripper motor only
-    /// @param gripper_mode - specified mode like "position", "ext_position", "velocity", "current", and "pwm"
-    /// @param profile_vel - register value that sets the max velocity for the motor if using the "position" or "ext_position" operating modes
-    /// @param profile_accel - register value that sets the max acceleration for the motor if using the "position" or "ext_position" operating modes
-    bool arm_set_gripper_operating_mode(std::string gripper_mode, const int32_t profile_vel = JOINT_PROFILE_VELOCITY, const int32_t profile_accel = JOINT_PROFILE_ACCELERATION);
+    /// @brief Sets the operating mode for an individual joint only
+    /// @param joint_name - name of the joint for which to change the operating mode
+    /// @param mode - specified mode like "position", "ext_position", "velocity", and "pwm"
+    /// @param profile_vel - register value that sets the max velocity for the joint if using the "position" or "ext_position" operating modes
+    /// @param profile_accel - register value that sets the max acceleration for the joint if using the "position", "ext_position", or "velocity" operating modes
+    bool arm_set_single_joint_operating_mode(const std::string joint_name, const std::string mode, const int32_t profile_vel = JOINT_PROFILE_VELOCITY, const int32_t profile_accel = JOINT_PROFILE_ACCELERATION);
 
     /// @brief Calculates the linear distance in meters between the gripper fingers given a servo angle
     /// @param horn_angle - gripper angle in radians

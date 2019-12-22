@@ -51,7 +51,7 @@
 
     <!-- Trajectory Execution Functionality -->
     <include ns="move_group" file="$(find interbotix_moveit)/launch/trajectory_execution.launch.xml" if="$(arg allow_trajectory_execution)">
-      <arg name="moveit_manage_controllers" value="true" />
+      <arg name="fake_execution" value="$(arg fake_execution)"/>
       <arg name="dof" value="$(arg dof)"/>
     </include>
 

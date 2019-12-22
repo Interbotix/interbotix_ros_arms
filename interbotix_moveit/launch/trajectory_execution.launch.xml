@@ -14,9 +14,11 @@
   <param name="trajectory_execution/allowed_start_tolerance" value="0.01"/> <!-- default 0.01 -->
 
   <!-- Load the robot specific controller manager; this sets the moveit_controller_manager ROS parameter -->
-  <arg name="dof"        default=""/>
+  <arg name="dof"             default=""/>
+  <arg name="fake_execution"  default="false"/>
   <include file="$(find interbotix_moveit)/launch/interbotix_moveit_controller_manager.launch.xml">
     <arg name="dof" value="$(arg dof)"/>
+    <arg name="fake_execution" value="$(arg fake_execution)"/>
   </include>
 
 </launch>

@@ -10,7 +10,7 @@
   <arg name="use_external_gripper_urdf"     default="false"/>
   <arg name="external_gripper_urdf_loc"     default=""/>
   <arg name="load_gazebo_material"          default="false"/>
-  <arg name="load_moveit_world_frame"       default="false"/>
+  <arg name="use_moveit"                    default="false"/>
   <arg name="rvizconfig"                    default="$(find interbotix_descriptions)/rviz/description.rviz" />
   <arg name="model"                         default="$(find interbotix_descriptions)/urdf/$(arg robot_model).urdf.xacro
                                                      robot_name:=$(arg robot_name)
@@ -19,7 +19,7 @@
                                                      external_gripper_urdf:=$(arg use_external_gripper_urdf)
                                                      external_gripper_urdf_loc:=$(arg external_gripper_urdf_loc)
                                                      gazebo:=$(arg load_gazebo_material)
-                                                     moveit:=$(arg load_moveit_world_frame)"/>
+                                                     moveit:=$(arg use_moveit)"/>
 
   <param name="$(arg robot_name)/robot_description"  command="$(find xacro)/xacro --inorder $(arg model)" />
 

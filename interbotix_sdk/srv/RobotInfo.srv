@@ -20,6 +20,7 @@
 #                   if the driver node is shutdown (which torques off all motors),
 #                   the arm doesn't come crashing down (taken from arm_poses.h)
 #   11) num_joints - the number of joints in the arm (excluding gripper)
+#   12) num_single_joints - the number of all joints in the robot (includes gripper and any 'single' joints)
 
 ---
 # joint names appear in the same order as they do in the joint_states.name vector
@@ -34,3 +35,4 @@ bool use_gripper
 float64[] home_pos
 float64[] sleep_pos
 int8 num_joints
+int8 num_single_joints

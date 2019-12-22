@@ -30,6 +30,6 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | use_external_gripper_urdf | if you have a URDF of a custom gripper attachment, set this to 'true' | false |
 | external_gripper_urdf_loc | set the file path to where your custom gripper attachment URDF is located | "" |
 | load_gazebo_material | set this to 'true' if Gazebo is being used; it makes sure to also load Gazebo related configs to the 'robot_description' parameter so that the robot models show up black in Gazebo | false |
-| load_moveit_world_frame | set this to 'true' if MoveIt is being used; it makes sure to also load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot arm | false |
+| use_moveit | set this to 'true' if MoveIt is being used; it makes sure to also load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot arm | false |
 | rvizconfig | file path to the config file Rviz should load | refer to [description.launch](launch/description.launch) |
 | model | file path to the robot-specific URDF including arguments to be passed in | refer to [description.launch](launch/description.launch) |

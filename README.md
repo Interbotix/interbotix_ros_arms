@@ -89,11 +89,11 @@ $ roslaunch interbotix_sdk arm_run.launch robot_name:=vx250
 ```
 By default, all the motors in the robot are torqued on so it will be very difficult to manually manipulate it. To torque off the motors, execute the command below in another terminal. Be aware though that this will cause the robot to collapse so manually hold the arm or turret before executing it.
 ```
-$ rosservice call /vx250/torque_arm_off
+$ rosservice call /vx250/torque_joints_off
 ```
 Now you should be able to freely manipulate the arm and gripper. Take note of how the Rviz model accurately mimics the real robot. To make the robot hold a certain pose, manually hold the robot in the desired pose and execute the following command:
 ```
-$ rosservice call /vx250/torque_arm_on
+$ rosservice call /vx250/torque_joints_on
 ```
 You can now let go and observe how the arm stays in place.
 

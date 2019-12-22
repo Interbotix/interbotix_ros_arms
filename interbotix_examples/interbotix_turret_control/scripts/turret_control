@@ -54,12 +54,12 @@ class TurretControlGUI(QWidget):
         self.master_layout = QGridLayout()                                                              # Root container for the GUI
         self.joint_commands = JointCommands()                                                           # Holds the current 'Pan' and 'Tilt' motor commands
         self.joint_commands.cmd = [0, 0]
-        rospy.wait_for_service("torque_arm_on")
-        rospy.wait_for_service("torque_arm_off")
+        rospy.wait_for_service("torque_joints_on")
+        rospy.wait_for_service("torque_joints_off")
         rospy.wait_for_service("get_robot_info")
         rospy.wait_for_service("set_motor_register_values")
-        self.srv_torque_on = rospy.ServiceProxy("torque_arm_on", Empty)                                 # ROS Service to torque the turret on
-        self.srv_torque_off = rospy.ServiceProxy("torque_arm_off", Empty)                               # ROS Service to torque the turret off
+        self.srv_torque_on = rospy.ServiceProxy("torque_joints_on", Empty)                                 # ROS Service to torque the turret on
+        self.srv_torque_off = rospy.ServiceProxy("torque_joints_off", Empty)                               # ROS Service to torque the turret off
         srv_robot_info = rospy.ServiceProxy("get_robot_info", RobotInfo)                                # ROS Service get joint limit information
         self.srv_motor_registers = rospy.ServiceProxy("set_motor_register_values", RegisterValues)      # ROS Service to set the 'Profile_Velocity' register on the motors
         self.srv_torque_on()                                                                            # Torque on the turret

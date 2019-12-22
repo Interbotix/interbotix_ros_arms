@@ -1,0 +1,32 @@
+# This file contains settings for operating the PID controllers that can be used when
+# sending trajectories to the arm joints. As menioned in the documentation, there are two
+# control modes when commanding trajectories. The first mode involves taking the desired
+# joint 'positions' in each waypoint and commanding them directly to all the motors.
+# Similarly, the second mode involves taking the desired joint 'velocities' in each waypoint
+# and commanding them directly to all the motors. The issue with doing this is that the
+# interbotix_sdk assumes that when a 'position' or 'velocity' command is sent to a motor,
+# the internal PID controller in the motor firmware is able to track the command perfectly.
+# However, due to gravity, backlash, and potentially other factors, this is not always the case.
+# While the PID gains in the motor firmware can be tuned, it does not seem to make any noticeable
+# difference. To fix this issue, velocity-based-position-PID-controllers were placed in the
+# interbotix_sdk between the desired trajectory and the motors. The way this works is as follows:
+#
+# 1) Whenever it's time for a new waypoint in a trajectory to get processed, the desired joint
+#    positions are set as reference positions for all controllers. Additionally, the desired joint
+#    velocities are set as feedforward terms for all controllers. Lastly, all PID error terms are cleared to 0.
+# 2) Between waypoints, the PID controllers run at 100 Hz, reading the current joint positions and adjusting
+#    the outputted control velocities based on the errors.
+#
+# Note that doing PID control will be most useful when working with MoveIt since MoveIt generates a
+# trajectory message with both desired positions and velocities. The controllers will not work well
+# if only joint positions or only joint velocities are specified exclusively.
+#
+# The positions of the gains in the vectors below correspond to the positions of the joint names in the
+# JointState.name vector of the published JointState messages. Note that the default gains seem to work
+# well when controlling the WidowX 200 Robot Arm. Some tuning may be required for the other robot arms.
+
+Kp_vec: [5, 5, 5, 5, 5]                       # Proportional gain vector
+Ki_vec: [0, 0, 0, 0, 0]                       # Integral gain vector
+Kd_vec: [0, 0, 0, 0, 0]                       # Derivative gain vector
+umin_vec: [-3.14, -3.14, -3.14, -3.14, -3.14] # Min allowable controller output (-PI rad/s)
+umax_vec: [3.14, 3.14, 3.14, 3.14, 3.14]      # Max allowable controller output (PI rad/s)

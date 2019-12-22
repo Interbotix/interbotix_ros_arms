@@ -9,7 +9,10 @@
 #   3) Return_Delay_Time..........The amount of time the servo delays in sending a reply packet after receiving a
 #                                 command packet. A value of '0' tells the servo to send a reply without any delay.
 #   4) Drive_Mode:................Used to define what direction is positive rotation. A value of '0' means CCW is
-#                                 positive while a value of '1' means CW is positive.
+#                                 positive while a value of '1' means CW is positive. It also defines if profiles are
+#                                 built based on velocity or time. 'Velocity' is the default (value of '0') and 'Time'
+#                                 is a value of '4'. Adding the 'direction' value to the 'profile' value gives the
+#                                 appropiate register value
 #   5) Velocity_Limit.............Defines the max speed of the motor. A value of '131' correpsonds to a max speed
 #                                 of PI rad/s
 #   6) Min_Position_Limit.........Defines the minimum limit of a joint. Values range from 0 to 4095 with 2048
@@ -24,9 +27,16 @@
 # http://support.interbotix.com/ under the 'Specifications' section. (Click a robot and scroll down to the 'Default Joint Limits' section.)
 #
 # To make the process of loading and setting the configs more efficient, the 'order' sequence defines the order that the interbotix_sdk node should process the configs.
-
+# Additionally, the 'order' sequence defines a 'group' of joints (excluding the 'gripper') that the interbotix_sdk will control at the exact same time (as opposed to
+# commanding each of the joints in the group sequentially which would increase lag and not be as efficient).
+#
+# If your application involves controlling other joints in addition to an Interbotix Robot, place the names of those joints in the 'singles' sequence. You can then
+# control these joints individually using the 'single_joint/command' topic. Note that by default, all the motors listed in the 'order' sequence (excluding 'shadow'
+# motors) can be controlled individually using the above topic as well. Also note that there is no limit to the number of additional joints that can be placed in this
+# sequence.
 
 order: [waist, shoulder, shoulder_shadow, elbow, wrist_angle, wrist_rotate, gripper]
+singles: []
 
 waist:
   ID: 1
