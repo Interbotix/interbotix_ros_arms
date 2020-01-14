@@ -379,6 +379,15 @@ void RobotArm::arm_get_motor_configs(void)
     return;
   }
 
+  // Define the home and sleep positions for the arm joints
+  YAML::Node sleep_node = dxl_config["sleep"];
+  for (auto const& value: sleep_node)
+  {
+    sleep_positions.push_back(value.as<double>());
+    home_positions.push_back(0);
+  }
+
+  // Get the actual motor configs
   YAML::Node order_node = dxl_config["order"];
   YAML::Node singles_node = dxl_config["singles"];
   std::vector <YAML::Node> nodes {order_node, singles_node};
@@ -907,7 +916,8 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
     jnt_tra_msg.points.clear();
     jnt_tra_msg.header = msg.header;
     for (auto const& joint:arm_joints)
-      jnt_tra_msg.joint_names.push_back(joint.name);
+      if (joint.name != "gripper")
+        jnt_tra_msg.joint_names.push_back(joint.name);
 
     cntr = 0;
     while(cntr < msg.points.size())
@@ -916,9 +926,12 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
       jnt_tra_point_msg.time_from_start = msg.points.at(cntr).time_from_start;
       for (auto const& joint:arm_joints)
       {
-        jnt_tra_point_msg.positions.push_back(msg.points.at(cntr).positions.at(joint_order[joint.name]));
-        jnt_tra_point_msg.velocities.push_back(msg.points.at(cntr).velocities.at(joint_order[joint.name]));
-        jnt_tra_point_msg.accelerations.push_back(msg.points.at(cntr).accelerations.at(joint_order[joint.name]));
+        if (joint.name != "gripper")
+        {
+          jnt_tra_point_msg.positions.push_back(msg.points.at(cntr).positions.at(joint_order[joint.name]));
+          jnt_tra_point_msg.velocities.push_back(msg.points.at(cntr).velocities.at(joint_order[joint.name]));
+          jnt_tra_point_msg.accelerations.push_back(msg.points.at(cntr).accelerations.at(joint_order[joint.name]));
+        }
       }
       jnt_tra_msg.points.push_back(jnt_tra_point_msg);
       cntr++;
@@ -1015,19 +1028,16 @@ bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, inter
       res.upper_gripper_limit = ptr->limits->upper;
       res.use_gripper = true;
     }
-    else
-    {
-      ptr = model.getJoint(joint.name);
-      res.lower_joint_limits.push_back(ptr->limits->lower);
-      res.upper_joint_limits.push_back(ptr->limits->upper);
-      res.velocity_limits.push_back(ptr->limits->velocity);
-    }
+    ptr = model.getJoint(joint.name);
+    res.lower_joint_limits.push_back(ptr->limits->lower);
+    res.upper_joint_limits.push_back(ptr->limits->upper);
+    res.velocity_limits.push_back(ptr->limits->velocity);
     res.joint_names.push_back(joint.name);
     res.joint_ids.push_back(joint.motor_id);
   }
-  // get the home and sleep positions from arm_poses.h
-  res.home_pos = arm_poses::home_positions.at(robot_model);
-  res.sleep_pos = arm_poses::sleep_positions.at(robot_model);
+
+  res.home_pos = home_positions;
+  res.sleep_pos = sleep_positions;
   res.num_joints = joint_num_write;
   res.num_single_joints = all_joints.size();
   return true;
@@ -1681,7 +1691,8 @@ bool RobotArm::arm_set_joint_operating_mode(const std::string arm_mode, const in
   if (arm_mode_set)
   {
     for (auto &joint : arm_joints)
-      joint_map[joint.name].mode = arm_operating_mode;
+      if (joint.name != "gripper")
+        joint_map[joint.name].mode = arm_operating_mode;
   }
   else
     ROS_ERROR("Invalid control mode for the arm joints.");

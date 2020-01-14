@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   interbotix_moveit
   message_generation
+  moveit_commander
   moveit_ros_planning_interface
   moveit_visual_tools
   roscpp
@@ -43,7 +44,7 @@ generate_messages(
 ## Declare things to be passed to dependent projects
 catkin_package(
  INCLUDE_DIRS include
- CATKIN_DEPENDS geometry_msgs interbotix_moveit message_runtime moveit_ros_planning_interface moveit_visual_tools roscpp rospy std_msgs tf
+ CATKIN_DEPENDS geometry_msgs interbotix_moveit message_runtime moveit_commander moveit_ros_planning_interface moveit_visual_tools roscpp rospy std_msgs tf
 )
 
 ###########

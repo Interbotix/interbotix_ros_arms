@@ -34,8 +34,12 @@
 # control these joints individually using the 'single_joint/command' topic. Note that by default, all the motors listed in the 'order' sequence (excluding 'shadow'
 # motors) can be controlled individually using the above topic as well. Also note that there is no limit to the number of additional joints that can be placed in this
 # sequence.
+#
+# Finally, the 'sleep' sequence defines the positions [rad] of each joint (in the 'order' sequence) such that the links connected to the joints are brought into a
+# folded, compact state (excludes 'gripper' and 'shadow' motors if applicable).
 
 order: [pan, tilt, tilt_shadow]
+sleep: [0, 0]
 singles: []
 
 pan:
