@@ -15,7 +15,7 @@ from interbotix_sdk.msg import JointCommands
 from interbotix_sdk.srv import RegisterValues
 from interbotix_sdk.srv import RegisterValuesRequest
 from interbotix_sdk.srv import RobotInfo
-from interbotix_turret_control.msg import TurretControl
+from interbotix_turret_control.msg import TurretJoyControl
 
 from python_qt_binding.QtGui import QFont
 from python_qt_binding.QtGui import QBrush
@@ -36,7 +36,7 @@ class TurretControlGUI(QWidget):
         self.traj_list = []                                                                             # List where each row is a dictionary containing data from each row of the 'Trajectory' table
         self.traj_index = 0                                                                             # Default index specifying a row in self.traj_list
         self.rest_pos = [0, 0]                                                                          # Holds the current 'Pan' and 'Tilt' position commands when the 'Set Rest Position' button is pressed
-        self.joy_msg = TurretControl()                                                                  # Holds the external joystick controller commands
+        self.joy_msg = TurretJoyControl()                                                               # Holds the external joystick controller commands
         self.joy_speeds = {"course" : 1.5, "fine" : 1.5, "current" : 1.5}                               # Holds the 'course' and 'fine' speed values when using the external joystick controller
         self.js_win = None                                                                              # Holds the mouse controlled joystick object (class details in joystick.py)
         self.joint_states = None                                                                        # Holds the current joint states for the 'Pan' and 'Tilt' motors
@@ -58,14 +58,14 @@ class TurretControlGUI(QWidget):
         rospy.wait_for_service("torque_joints_off")
         rospy.wait_for_service("get_robot_info")
         rospy.wait_for_service("set_motor_register_values")
-        self.srv_torque_on = rospy.ServiceProxy("torque_joints_on", Empty)                                 # ROS Service to torque the turret on
-        self.srv_torque_off = rospy.ServiceProxy("torque_joints_off", Empty)                               # ROS Service to torque the turret off
+        self.srv_torque_on = rospy.ServiceProxy("torque_joints_on", Empty)                              # ROS Service to torque the turret on
+        self.srv_torque_off = rospy.ServiceProxy("torque_joints_off", Empty)                            # ROS Service to torque the turret off
         srv_robot_info = rospy.ServiceProxy("get_robot_info", RobotInfo)                                # ROS Service get joint limit information
         self.srv_motor_registers = rospy.ServiceProxy("set_motor_register_values", RegisterValues)      # ROS Service to set the 'Profile_Velocity' register on the motors
         self.srv_torque_on()                                                                            # Torque on the turret
         self.robot_info = srv_robot_info()                                                              # Get the turret joint limits
         self.pub_cmds = rospy.Publisher("joint/commands", JointCommands, queue_size=100)                # ROS Publisher to publish joint commands
-        self.sub_joy_cmds = rospy.Subscriber("joy/commands", TurretControl, self.joystick_cb)           # ROS Subsciber to get commands from the external joystick controller
+        self.sub_joy_cmds = rospy.Subscriber("joy/commands", TurretJoyControl, self.joystick_cb)        # ROS Subsciber to get commands from the external joystick controller
         self.sub_joint_states = rospy.Subscriber("joint_states", JointState, self.joint_state_cb)       # ROS Subscriber to get current joint states
         self.tmr_speed = rospy.Timer(rospy.Duration(0.01), self.speed_to_time_cb)                       # ROS Timer to convert a 'Speed' value to a 'Time' value and move the motors
         tmr_main_thread = QTimer(self)                                                                  # PyQt Timer to update the GUI from the main thread when necessary
@@ -108,7 +108,7 @@ class TurretControlGUI(QWidget):
             self.joint_states = msg
 
     ### @brief ROS Subscriber callback function to get external controller input
-    ### @param msg - a TurretControl type message
+    ### @param msg - a TurretJoyControl type message
     def joystick_cb(self, msg):
         with self.joy_mutex:
             self.joy_msg = msg
@@ -157,21 +157,21 @@ class TurretControlGUI(QWidget):
         if (self.ext_joy_checkbox.isChecked()):
             with self.joy_mutex:
                 msg = copy.deepcopy(self.joy_msg)
-                self.joy_msg.arm_speed_cmd = 0
-                self.joy_msg.arm_toggle_speed_cmd = 0
+                self.joy_msg.speed_cmd = 0
+                self.joy_msg.toggle_speed_cmd = 0
 
-            if (msg.arm_speed_cmd == TurretControl.ARM_LOW_SPEED and self.joy_speeds["current"] >= 0.2):
+            if (msg.speed_cmd == TurretJoyControl.SPEED_DEC and self.joy_speeds["current"] >= 0.2):
                 self.joy_speeds["current"] -= 0.1
                 self.message_label.setText("Speed at %.1f%% of max value." % ((self.joy_speeds["current"]/3.0)*100))
-            elif (msg.arm_speed_cmd == TurretControl.ARM_HIGH_SPEED and self.joy_speeds["current"] < 3):
+            elif (msg.speed_cmd == TurretJoyControl.SPEED_INC and self.joy_speeds["current"] < 3):
                 self.joy_speeds["current"] += 0.1
                 self.message_label.setText("Speed at %.1f%% of max value." % ((self.joy_speeds["current"]/3.0)*100))
 
-            if (msg.arm_toggle_speed_cmd == TurretControl.ARM_COURSE_SPEED):
+            if (msg.toggle_speed_cmd == TurretJoyControl.SPEED_COURSE):
                 self.joy_speeds["fine"] = self.joy_speeds["current"]
                 self.joy_speeds["current"] = self.joy_speeds["course"]
                 self.message_label.setText("Switching to course speed control (set to %.1f%% of max value.)" % ((self.joy_speeds["current"]/3.0)*100))
-            elif (msg.arm_toggle_speed_cmd == TurretControl.ARM_FINE_SPEED):
+            elif (msg.toggle_speed_cmd == TurretJoyControl.SPEED_FINE):
                 self.joy_speeds["course"] = self.joy_speeds["current"]
                 self.joy_speeds["current"] = self.joy_speeds["fine"]
                 self.message_label.setText("Switching to fine speed control (set to %.1f%% of max value.)" % ((self.joy_speeds["current"]/3.0)*100))
@@ -183,29 +183,29 @@ class TurretControlGUI(QWidget):
             tilt_min = float(self.name_map["tilt"]["lower_limit"].text())
             tilt_max = float(self.name_map["tilt"]["upper_limit"].text())
 
-            if (msg.pan_cmd == TurretControl.PAN_CCW):
+            if (msg.pan_cmd == TurretJoyControl.PAN_CCW):
                 if ((pan_cmd + self.joy_speeds["current"]) < pan_max):
                     pan_cmd += self.joy_speeds["current"]
                 else:
                     pan_cmd = pan_max
-            elif (msg.pan_cmd == TurretControl.PAN_CW):
+            elif (msg.pan_cmd == TurretJoyControl.PAN_CW):
                 if ((pan_cmd - self.joy_speeds["current"]) > pan_min):
                     pan_cmd -= self.joy_speeds["current"]
                 else:
                     pan_cmd = pan_min
 
-            if (msg.tilt_cmd == TurretControl.TILT_CCW):
+            if (msg.tilt_cmd == TurretJoyControl.TILT_UP):
                 if ((tilt_cmd + self.joy_speeds["current"]) < tilt_max):
                     tilt_cmd += self.joy_speeds["current"]
                 else:
                     tilt_cmd = tilt_max
-            elif (msg.tilt_cmd == TurretControl.TILT_CW):
+            elif (msg.tilt_cmd == TurretJoyControl.TILT_DOWN):
                 if ((tilt_cmd - self.joy_speeds["current"]) > tilt_min):
                     tilt_cmd -= self.joy_speeds["current"]
                 else:
                     tilt_cmd = tilt_min
 
-            if (msg.robot_pose == TurretControl.HOME_POSE):
+            if (msg.pan_cmd == TurretJoyControl.PAN_TILT_HOME and msg.tilt_cmd == TurretJoyControl.PAN_TILT_HOME):
                 pan_cmd = self.rest_pos[0]
                 tilt_cmd = self.rest_pos[1]
 
@@ -263,8 +263,8 @@ class TurretControlGUI(QWidget):
 
         # second row
         slider = self.create_slider()
-        lower_lim = self.rad2deg(self.robot_info.lower_joint_limits[joint])
-        upper_lim = self.rad2deg(self.robot_info.upper_joint_limits[joint])
+        lower_lim = round(self.rad2deg(self.robot_info.lower_joint_limits[joint]), 1)
+        upper_lim = round(self.rad2deg(self.robot_info.upper_joint_limits[joint]), 1)
         lower_limit = self.create_textbox("%.1f" % lower_lim)
         upper_limit = self.create_textbox("%.1f" % upper_lim)
         grid_layout.addWidget(lower_limit, 1, 0, Qt.AlignCenter)
@@ -589,12 +589,12 @@ class TurretControlGUI(QWidget):
     ### @brief Helper function to convert radians to degrees
     ### @param rad - value in radians to convert to degrees
     def rad2deg(self, rad):
-        return (180/math.pi) * rad
+        return (180.0/math.pi) * rad
 
     ### @brief Helper function to convert degrees to radians
     ### @param rad - value in degrees to convert to radians
     def deg2rad(self, deg):
-        rad = (math.pi/180) * deg
+        rad = (math.pi/180.0) * deg
         # this essentially trims the number to the decimal place shown below without rounding; this is neccessary since
         # commanding a 'boundary limit' (like 180 deg for the pan motor) will not work otherwise - it seems that the value
         # is slightly too large by like 0.00001 and will be ignored.

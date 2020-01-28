@@ -1,7 +1,7 @@
 # interbotix_turret_control
 
 ## Overview
-This package can be used to control the motion of any of the five [X-series turret](https://www.trossenrobotics.com/c/robot-turrets.aspx) platforms. Essentially pan-and-tilt mechanisms, the turrets can be manipulated either using a SONY PS3 or PS4 controller via Bluetooth and/or a GUI. The target audience for this package are users who prefer to operate the turrets without having to directly program them. For those who *do* want to program them, please note that the Dynamixel register 'Drive_Mode' is set to work with a 'Time-based Profile' as opposed to the 'Velocity-based Profile' that the robotics arms are set to work with (more about that [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-velocity112)). You can easily change that by subtracting '4' from the turrets' 'Drive_Mode' registers located in the *interbotix_sdk/config* directory.
+This package can be used to control the motion of any of the five [X-series turret](https://www.trossenrobotics.com/c/robot-turrets.aspx) platforms. Essentially pan-and-tilt mechanisms, the turrets can be manipulated either using a SONY PS3 or PS4 controller via Bluetooth and/or a GUI. The target audience for this package are users who prefer to operate the turrets without having to directly program them.
 
 Regarding naming conventions, there are three parts to a turret's name. The first two letters correspond to the robot model name. For example, the 'WidowX' platform is signified by 'wx'. The next two letters describe the type of motor used in the turret. There are only two choices available: 'xl' and 'xm'. Finally, the last letter signifies if the 'tilt' joint is composed of a single motor ('s') or dual motors ('d'). Thus, the 'PhantomX XL430 Robot Turret' can be abbreviated as 'pxxls'.
 
@@ -9,8 +9,8 @@ Regarding naming conventions, there are three parts to a turret's name. The firs
 ![turret_control_flowchart](images/interbotix_turret_control_flowchart.png)
 As shown above, the *interbotix_turret_control* package builds on top of the *interbotix_sdk* package. To get familiar with the nodes in the *interbotix_sdk* package, please look at its README. The other nodes are described below:
 - **joy** - a ROS driver for a generic Linux joystick; it reads data from a SONY PS3 or PS4 controller joystick over Bluetooth and publishes  [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages to the `joy` topic
-- **turret_control_joy_node** - responsible for reading in raw [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages from the `joy` topic and converting them into [TurretControl](msg/TurretControl.msg) messages; this makes the code more readable and allows users to remap buttons very easily later.
-- **turret_control** - responsible for reading in [TurretControl](msg/TurretControl.msg) messages and sending 'pan' and 'tilt' commands to the *interbotix_sdk* node; besides for allowing external joystick control, it also displays a GUI to the user that can be used to manipulate the turret.
+- **turret_control_joy_node** - responsible for reading in raw [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages from the `joy` topic and converting them into [TurretJoyControl](msg/TurretJoyControl.msg) messages; this makes the code more readable and allows users to remap buttons very easily later.
+- **turret_control** - responsible for reading in [TurretJoyControl](msg/TurretJoyControl.msg) messages and sending 'pan' and 'tilt' commands to the *interbotix_sdk* node; besides for allowing external joystick control, it also displays a GUI to the user that can be used to manipulate the turret.
 
 ## Bluetooth Setup
 #### Sony PS4 Controller (Recommended)
@@ -71,14 +71,14 @@ If only controlling the turret with a joystick, look at the diagram and table be
 
 | Button | Action |
 | ------ | ------ |
-| PS | move the turret to its center position |
+| START/OPTIONS | move the turret to its center position |
 | R2 | rotate the 'pan' joint clockwise |
 | L2 | rotate the 'pan' joint counterclockwise |
 | D-pad Up | increase motor angular velocity in steps |
 | D-pad Down | decrease motor angular velocity in steps|
 | D-pad Left | 'Coarse' control - sets motor angular velocity to a user-preset 'fast' speed |
 | D-pad Right | 'Fine' control - set motor angular velocity to a user-preset 'slow' speed |
-| Right stick Up/Down | rotate the 'tilt' joint CCW/CW |
-| R3 | reverse the Right stick Up/Down control |
-| Left stick Left/Right | rotate the 'pan' joint CCW/CW |
-| L3 | reverses the Left stick Left/Right control and R2/L2 buttons|
+| Right stick Left/Right | pan the Turret CCW/CW |
+| R3 | reverses the Right stick Left/Right control and R2/L2 buttons |
+| Left stick Up/Down | tilt the Turret forward/backward |
+| L3 | reverses the Left stick Up/Down control|

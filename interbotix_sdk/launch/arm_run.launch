@@ -15,6 +15,7 @@
   <arg name="gripper_profile_acceleration"      default="0"/>
   <arg name="use_moveit"                        default="false"/>
   <arg name="use_pid_cntlrs"                    default="false"/>
+  <arg name="use_time_based_profile"            default="false"/>
 
   <include file="$(find interbotix_descriptions)/launch/description.launch">
     <arg name="robot_name"                      value="$(arg robot_name)"/>
@@ -49,6 +50,7 @@
     <param name="gripper_profile_acceleration"  value="$(arg gripper_profile_acceleration)"/>
     <param name="use_moveit"                    value="$(arg use_moveit)"/>
     <param name="use_pid_cntlrs"                value="$(arg use_pid_cntlrs)"/>
+    <param name="use_time_based_profile"        value="$(arg use_time_based_profile)"/>
     <rosparam if="$(arg use_pid_cntlrs)" file="$(find interbotix_sdk)/pid_config/$(arg robot_model)_pid.yaml" command="load"/>
   </node>
 

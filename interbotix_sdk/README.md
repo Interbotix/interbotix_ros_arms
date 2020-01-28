@@ -48,6 +48,7 @@ As shown in the image above, the *interbotix_sdk* package builds on top of the *
 - `gripper_profile_acceleration` - sets the max acceleration limit for the gripper joint; refer to 'arm_profile_acceleration' above.
 - `use_moveit` - if true, this node starts the FollowJointTrajectory action servers for the arm and gripper joints; set this to true if MoveIt is being used.
 - `use_pid_cntlrs` - if true, this node inserts PID controllers between a commanded joint trajectory and the physical motors. Default pid configs for each robot can be found in the [pid_config](pid_config/) directory. For better control, feel free to modify the gains as necessary. See one of the files for setup instructions and an explanation of how the controllers work. Note that if this parameter is true, the 'arm_operating_mode' must be set to 'velocity' control as well.
+- `use_time_based_profile` - when this is 'false', `arm_profile_velocity` and `gripper_profile_velocity` describe the max velocity limit for the arm joints and gripper joint respectively. Similarly, `arm_profile_acceleration` and `gripper_profile_acceleration` describe the max acceleration limit for the arm joints and gripper joint respectively. However, when this parameter is set to 'true', `arm_profile_velocity` and `gripper_profile_velocity` describe the time in milliseconds that the arm joints and gripper joint respectively should be moving. Similarly, `arm_profile_acceleration` and `gripper_profile_acceleration` describe the time in milliseconds that the arm joints and gripper joint respectively should be accelerating.
 
 ## Usage
 
@@ -76,6 +77,7 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | gripper_profile_acceleration | sets the max acceleration limit for the gripper joint; refer to 'arm_profile_acceleration' above | 0 |
 | use_moveit | set this to 'true' if MoveIt is being used; it makes sure to also load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot arm | false |
 | use_pid_cntlrs | set this to 'true' if you are commanding trajectories to the arm joints (via MoveIt or the trajectory topic) and would like to run PID controllers to make the motors better track the desired states. Refer to any file in the [pid_config](pid_config/) directory for a deeper explanation. Note that the 'arm_operating_mode' must be set to 'velocity' for this to work | false |
+| use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | false |
 
 
 ##### Interbotix Turret
@@ -97,6 +99,7 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | turret_operating_mode | desired operating mode for the turret joints; this can be "position", "velocity", "pwm", "current", or "none"; note that the PhantomX turret does not support "current" control | position |
 | turret_profile_velocity | register value describing the time span that it should take for the joints to move; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-velocity112); if doing 'position' control, setting this to '1000' would mean it would take 1000 ms for the turret to get to the desired position. to have an 'infinite' max limit, set this to '0' | 0 |
 | turret_profile_acceleration | register value describing the time span it should take for the joints to accelerate; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108); if doing 'velocity' control, setting this to 100 would mean it would take 100 ms for the turret joints to get to their desired velocity; to get very fast motion, set this to '0'. | 0 |
+| use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | true |
 
 ## Troubleshooting Notes
 Please note that the node does NOT check joint limits. It is up to the user to make sure that the joint limits are not violated. That said, if a motor experiences a load too much for it, it should error out - resulting in the motor torquing off. It is easy to tell if a motor is in an error state out since its LED will be flashing red. In this case, unplug and replug the power cable into the robot which should reset the motor.

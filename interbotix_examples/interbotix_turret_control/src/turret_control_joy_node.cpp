@@ -1,79 +1,82 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
-#include "interbotix_turret_control/TurretControl.h"
+#include "interbotix_turret_control/TurretJoyControl.h"
 
 // PS3 Controller button mappings
 static const std::map<std::string, int> ps3 = {{"PAN_CCW", 6},                  // buttons start here
                                                {"PAN_CW", 7},
-                                               {"HOME_POSE", 10},
-                                               {"FLIP_PAN", 11},
-                                               {"FLIP_TILT", 12},
-                                               {"ARM_HIGH_SPEED", 13},
-                                               {"ARM_LOW_SPEED", 14},
-                                               {"ARM_COURSE_SPEED", 15},
-                                               {"ARM_FINE_SPEED", 16},
-                                               {"PAN", 0},                      // axes start here
-                                               {"TILT", 4}};
+                                               {"PAN_TILT_HOME", 9},
+                                               {"FLIP_TILT", 11},
+                                               {"FLIP_PAN", 12},
+                                               {"SPEED_INC", 13},
+                                               {"SPEED_DEC", 14},
+                                               {"SPEED_COURSE", 15},
+                                               {"SPEED_FINE", 16},
+                                               {"TILT", 1},                     // axes start here
+                                               {"PAN", 3}};
 
 // PS4 Controller button mappings
 static const std::map<std::string, int> ps4 = {{"PAN_CCW", 6},                  // buttons start here
                                                {"PAN_CW", 7},
-                                               {"HOME_POSE", 10},
-                                               {"FLIP_PAN", 11},
-                                               {"FLIP_TILT", 12},
-                                               {"PAN", 0},                      // axes start here
-                                               {"TILT", 4},
-                                               {"ARM_SPEED_TYPE", 6},
-                                               {"ARM_SPEED", 7}};
+                                               {"PAN_TILT_HOME", 9},
+                                               {"FLIP_TILT", 11},
+                                               {"FLIP_PAN", 12},
+                                               {"TILT", 1},                     // axes start here
+                                               {"PAN", 3},
+                                               {"SPEED_TYPE", 6},
+                                               {"SPEED", 7}};
 
-ros::Publisher pub_joy_cmd;                                                     // ROS Publisher to publish TurretControl messages
+ros::Publisher pub_joy_cmd;                                                     // ROS Publisher to publish TurretJoyControl messages
 ros::Subscriber sub_joy_raw;                                                    // ROS Subscriber to get raw Joy messages
-interbotix_turret_control::TurretControl prev_joy_cmd;                          // Stores the previous TurretControl message
+interbotix_turret_control::TurretJoyControl prev_joy_cmd;                       // Stores the previous TurretJoyControl message
 std::map<std::string, int> cntlr;                                               // Stores the button mappings of a specific controller
 std::string controller_type;                                                    // Stores the selected controller type ('ps3' or 'ps4')
 double threshold;                                                               // Sensitivity threshold for the analog stick control on the joystick
 
-/// @brief Joystick callback to create custom TurretControl messages to control the Interbotix Turret
+/// @brief Joystick callback to create custom TurretJoyControl messages to control the Interbotix Turret
 /// @param msg - raw sensor_msgs::Joy data
 void joy_state_cb(const sensor_msgs::Joy &msg)
 {
-  static bool flip_tilt_cmd = false;
   static bool flip_pan_cmd = false;
-  static bool flip_tilt_cmd_last_state = false;
+  static bool flip_tilt_cmd = false;
   static bool flip_pan_cmd_last_state = false;
-  interbotix_turret_control::TurretControl joy_cmd;
+  static bool flip_tilt_cmd_last_state = false;
+  interbotix_turret_control::TurretJoyControl joy_cmd;
 
-  // Check the robot_pose
-  if (msg.buttons.at(cntlr["HOME_POSE"]) == 1)
-    joy_cmd.robot_pose = interbotix_turret_control::TurretControl::HOME_POSE;
+  // Check if the pan-and-tilt mechanism should be reset
+  if (msg.buttons.at(cntlr["PAN_TILT_HOME"]) == 1)
+  {
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_TILT_HOME;
+    joy_cmd.tilt_cmd = interbotix_turret_control::TurretJoyControl::PAN_TILT_HOME;
+  }
 
   if (controller_type == "ps3")
   {
-    // Check the arm_speed_cmd
-    if (msg.buttons.at(cntlr["ARM_HIGH_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_turret_control::TurretControl::ARM_HIGH_SPEED;
-    else if (msg.buttons.at(cntlr["ARM_LOW_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_turret_control::TurretControl::ARM_LOW_SPEED;
+    // Check the speed_cmd
+    if (msg.buttons.at(cntlr["SPEED_INC"]) == 1)
+      joy_cmd.speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_INC;
+    else if (msg.buttons.at(cntlr["SPEED_DEC"]) == 1)
+      joy_cmd.speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_DEC;
 
-    // Check the arm_toggle_speed_cmd
-    if (msg.buttons.at(cntlr["ARM_COURSE_SPEED"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_turret_control::TurretControl::ARM_COURSE_SPEED;
-    else if (msg.buttons.at(cntlr["ARM_FINE_SPEED"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_turret_control::TurretControl::ARM_FINE_SPEED;
+    // Check the toggle_speed_cmd
+    if (msg.buttons.at(cntlr["SPEED_COURSE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_COURSE;
+    else if (msg.buttons.at(cntlr["SPEED_FINE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_FINE;
   }
   else if (controller_type == "ps4")
   {
-    // Check the arm_speed_cmd
-    if (msg.axes.at(cntlr["ARM_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_turret_control::TurretControl::ARM_HIGH_SPEED;
-    else if (msg.axes.at(cntlr["ARM_SPEED"]) == -1)
-      joy_cmd.arm_speed_cmd = interbotix_turret_control::TurretControl::ARM_LOW_SPEED;
+    // Check the speed_cmd
+    if (msg.axes.at(cntlr["SPEED"]) == 1)
+      joy_cmd.speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_INC;
+    else if (msg.axes.at(cntlr["SPEED"]) == -1)
+      joy_cmd.speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_DEC;
 
-    // Check the arm_toggle_speed_cmd
-    if (msg.axes.at(cntlr["ARM_SPEED_TYPE"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_turret_control::TurretControl::ARM_COURSE_SPEED;
-    else if (msg.buttons.at(cntlr["ARM_SPEED_TYPE"]) == -1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_turret_control::TurretControl::ARM_FINE_SPEED;
+    // Check the toggle_speed_cmd
+    if (msg.axes.at(cntlr["SPEED_TYPE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_COURSE;
+    else if (msg.axes.at(cntlr["SPEED_TYPE"]) == -1)
+      joy_cmd.toggle_speed_cmd = interbotix_turret_control::TurretJoyControl::SPEED_FINE;
   }
 
   // Check if the pan_cmd should be flipped
@@ -86,24 +89,23 @@ void joy_state_cb(const sensor_msgs::Joy &msg)
 
   // Left stick pan control
   if (msg.axes.at(cntlr["PAN"]) <= -threshold && flip_pan_cmd == false)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CW;
   else if (msg.axes.at(cntlr["PAN"]) >= threshold && flip_pan_cmd == false)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CCW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CCW;
   else if (msg.axes.at(cntlr["PAN"]) <= -threshold && flip_pan_cmd == true)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CCW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CCW;
   else if (msg.axes.at(cntlr["PAN"]) >= threshold && flip_pan_cmd == true)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CW;
 
   // R & L button pan control
   if (msg.buttons.at(cntlr["PAN_CW"]) == 1 && flip_pan_cmd == false)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CW;
   else if (msg.buttons.at(cntlr["PAN_CCW"]) == 1 && flip_pan_cmd == false)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CCW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CCW;
   else if (msg.buttons.at(cntlr["PAN_CW"]) == 1 && flip_pan_cmd == true)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CCW;
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CCW;
   else if (msg.buttons.at(cntlr["PAN_CCW"]) == 1 && flip_pan_cmd == true)
-    joy_cmd.pan_cmd = interbotix_turret_control::TurretControl::PAN_CW;
-
+    joy_cmd.pan_cmd = interbotix_turret_control::TurretJoyControl::PAN_CW;
 
   // Check if the tilt_cmd should be flipped
   if (msg.buttons.at(cntlr["FLIP_TILT"]) == 1 && flip_tilt_cmd_last_state == false)
@@ -115,22 +117,21 @@ void joy_state_cb(const sensor_msgs::Joy &msg)
 
   // Check the tilt_cmd
   if (msg.axes.at(cntlr["TILT"]) <= -threshold && flip_tilt_cmd == false)
-    joy_cmd.tilt_cmd = interbotix_turret_control::TurretControl::TILT_CW;
+    joy_cmd.tilt_cmd = interbotix_turret_control::TurretJoyControl::TILT_DOWN;
   else if (msg.axes.at(cntlr["TILT"]) >= threshold && flip_tilt_cmd == false)
-    joy_cmd.tilt_cmd = interbotix_turret_control::TurretControl::TILT_CCW;
+    joy_cmd.tilt_cmd = interbotix_turret_control::TurretJoyControl::TILT_UP;
   else if (msg.axes.at(cntlr["TILT"]) <= -threshold && flip_tilt_cmd == true)
-    joy_cmd.tilt_cmd = interbotix_turret_control::TurretControl::TILT_CCW;
+    joy_cmd.tilt_cmd = interbotix_turret_control::TurretJoyControl::TILT_UP;
   else if (msg.axes.at(cntlr["TILT"]) >= threshold && flip_tilt_cmd == true)
-    joy_cmd.tilt_cmd = interbotix_turret_control::TurretControl::TILT_CW;
+    joy_cmd.tilt_cmd = interbotix_turret_control::TurretJoyControl::TILT_DOWN;
 
-  // Only publish a TurretControl message if any of the following fields have changed.
+  // Only publish a TurretJoyControl message if any of the following fields have changed.
   if (!(prev_joy_cmd.pan_cmd == joy_cmd.pan_cmd &&
       prev_joy_cmd.tilt_cmd == joy_cmd.tilt_cmd &&
-      prev_joy_cmd.arm_speed_cmd == joy_cmd.arm_speed_cmd &&
-      prev_joy_cmd.arm_toggle_speed_cmd == joy_cmd.arm_toggle_speed_cmd &&
-      prev_joy_cmd.robot_pose == joy_cmd.robot_pose))
+      prev_joy_cmd.speed_cmd == joy_cmd.speed_cmd &&
+      prev_joy_cmd.toggle_speed_cmd == joy_cmd.toggle_speed_cmd))
       pub_joy_cmd.publish(joy_cmd);
-      prev_joy_cmd = joy_cmd;
+  prev_joy_cmd = joy_cmd;
 }
 
 int main(int argc, char **argv)
@@ -144,7 +145,7 @@ int main(int argc, char **argv)
   else
     cntlr = ps4;
   sub_joy_raw = n.subscribe("joy", 100, joy_state_cb);
-  pub_joy_cmd = n.advertise<interbotix_turret_control::TurretControl>("joy/commands", 100);
+  pub_joy_cmd = n.advertise<interbotix_turret_control::TurretJoyControl>("joy/commands", 100);
   ros::spin();
   return 0;
 }

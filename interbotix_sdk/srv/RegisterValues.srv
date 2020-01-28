@@ -5,8 +5,8 @@
 # ...click on a motor model, and scroll down to the 'Control Table of RAM Area' section.
 #
 # There are four options to set or get a register value:
-#   1) ARM_JOINTS_AND_GRIPPER - affects the register values for all joints, including the gripper.
-#   2) ARM_JOINTS - affects the register values for all joints, excluding the gripper.
+#   1) ARM_JOINTS_AND_GRIPPER - affects the register values for all arm joints, including the gripper.
+#   2) ARM_JOINTS - affects the register values for all arm joints, excluding the gripper.
 #   3) GRIPPER - affects the register value only for the gripper
 #   4) SINGLE_MOTOR - affects the register value for the motor specified by the 'id' parameter.
 #                     Note that the 'id' parameter only needs to be used for this option. For any

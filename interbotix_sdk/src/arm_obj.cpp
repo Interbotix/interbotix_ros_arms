@@ -428,6 +428,10 @@ void RobotArm::arm_get_motor_configs(void)
   joint_ids_write = new uint8_t[joint_num_write];
   size_t cntr = 0;
 
+  // Check to see if the Drive_Mode register should be set to 'Time Based Profile' instead of 'Velocity Based Profile'
+  bool use_time_based_profile;
+  ros::param::get("~use_time_based_profile", use_time_based_profile);
+
   // For each node in the yaml file, read in the register names and the values that should be written to them.
   for (auto const& node: nodes)
   {
@@ -459,6 +463,8 @@ void RobotArm::arm_get_motor_configs(void)
             }
           }
         }
+        if (item_name == "Drive_Mode" && use_time_based_profile == true)
+          value += 4;
         Info info = {(uint8_t) id, item_name, value};
         dynamixel_info.push_back(info);
       }
@@ -1515,9 +1521,11 @@ void RobotArm::arm_execute_joint_trajectory(const ros::TimerEvent&)
       cntr = 0;
       // if using pid control, clear the pid errors and stop all motion
       if (use_pid_cntlrs && arm_operating_mode == State::VELOCITY)
+      {
         pid_cntlrs.multi_pid_clear();
         double vel_array[joint_num_write] = {0};
         arm_set_joint_velocities(vel_array);
+      }
     }
   }
   // for every iteration through the timer callback, calculate and output the corrected

@@ -1,123 +1,65 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
-#include "interbotix_joy_control/JoyControl.h"
-
+#include "interbotix_joy_control/ArmJoyControl.h"
 
 // PS3 Controller button mappings
-static const std::map<std::string, int> ps3 = {{"GRIPPER_LOW_PWM", 0},          // buttons start here
+static const std::map<std::string, int> ps3 = {{"GRIPPER_PWM_DEC", 0}, // buttons start here
                                                {"GRIPPER_OPEN", 1},
-                                               {"GRIPPER_HIGH_PWM", 2},
+                                               {"GRIPPER_PWM_INC", 2},
                                                {"GRIPPER_CLOSE", 3},
-                                               {"EE_Y_LEFT", 4},
-                                               {"EE_Y_RIGHT", 5},
+                                               {"EE_Y_INC", 4},
+                                               {"EE_Y_DEC", 5},
                                                {"WAIST_CCW", 6},
                                                {"WAIST_CW", 7},
-                                               {"FLIP_EE_Y", 8},
+                                               {"SLEEP_POSE", 8},
                                                {"HOME_POSE", 9},
-                                               {"SLEEP_POSE", 10},
                                                {"FLIP_EE_X", 11},
-                                               {"FLIP_WRIST_ROTATE", 12},
-                                               {"ARM_HIGH_SPEED", 13},
-                                               {"ARM_LOW_SPEED", 14},
-                                               {"ARM_COURSE_SPEED", 15},
-                                               {"ARM_FINE_SPEED", 16},
-                                               {"EE_X", 0},                     // axes start here
+                                               {"FLIP_EE_ROLL", 12},
+                                               {"SPEED_INC", 13},
+                                               {"SPEED_DEC", 14},
+                                               {"SPEED_COURSE", 15},
+                                               {"SPEED_FINE", 16},
+                                               {"EE_X", 0},            // axes start here
                                                {"EE_Z", 1},
-                                               {"WRIST_ROTATE", 3},
-                                               {"WRIST_ANGLE", 4}};
+                                               {"EE_ROLL", 3},
+                                               {"EE_PITCH", 4}};
 
 // PS4 Controller button mappings
-static const std::map<std::string, int> ps4 = {{"GRIPPER_LOW_PWM", 0},          // buttons start here
+static const std::map<std::string, int> ps4 = {{"GRIPPER_PWM_DEC", 0}, // buttons start here
                                                {"GRIPPER_OPEN", 1},
-                                               {"GRIPPER_HIGH_PWM", 2},
+                                               {"GRIPPER_PWM_INC", 2},
                                                {"GRIPPER_CLOSE", 3},
-                                               {"EE_Y_LEFT", 4},
-                                               {"EE_Y_RIGHT", 5},
+                                               {"EE_Y_INC", 4},
+                                               {"EE_Y_DEC", 5},
                                                {"WAIST_CCW", 6},
                                                {"WAIST_CW", 7},
-                                               {"FLIP_EE_Y", 8},
+                                               {"SLEEP_POSE", 8},
                                                {"HOME_POSE", 9},
-                                               {"SLEEP_POSE", 10},
                                                {"FLIP_EE_X", 11},
-                                               {"FLIP_WRIST_ROTATE", 12},
-                                               {"EE_X", 0},                     // axes start here
+                                               {"FLIP_EE_ROLL", 12},
+                                               {"EE_X", 0},            // axes start here
                                                {"EE_Z", 1},
-                                               {"WRIST_ROTATE", 3},
-                                               {"WRIST_ANGLE", 4},
-                                               {"ARM_SPEED_TYPE", 6},
-                                               {"ARM_SPEED", 7}};
+                                               {"EE_ROLL", 3},
+                                               {"EE_PITCH", 4},
+                                               {"SPEED_TYPE", 6},
+                                               {"SPEED", 7}};
 
-ros::Publisher pub_joy_cmd;
-ros::Subscriber sub_joy_raw;
-interbotix_joy_control::JoyControl prev_joy_cmd;
-std::map<std::string, int> cntlr;
-std::string controller_type;
-double threshold;
+ros::Publisher pub_joy_cmd;                                 // ROS Publisher to publish ArmJoyControl messages
+ros::Subscriber sub_joy_raw;                                // ROS Subscriber to get Joy messages from the 'joy_node'
+interbotix_joy_control::ArmJoyControl prev_joy_cmd;         // Keep track of the previously commanded ArmJoyControl message so that only unique messages are published
+std::map<std::string, int> cntlr;                           // Holds either the PS3 or PS4 button mappings
+std::string controller_type;                                // Holds the name of the controller received from the ROS Parameter server
+double threshold;                                           // Joystick sensitivity threshold
 
-/// @brief Joystick callback to create custom JoyControl messages to control the Interbotix arm
+/// @brief Joystick callback to create custom ArmJoyControl messages to control the Locobot
 /// @param msg - raw sensor_msgs::Joy data
 void joy_state_cb(const sensor_msgs::Joy &msg)
 {
-  static bool flip_wrist_rotate_cmd = false;
-  static bool flip_wrist_rotate_cmd_last_state = false;
+  static bool flip_ee_roll_cmd = false;
+  static bool flip_ee_roll_cmd_last_state = false;
   static bool flip_ee_x_cmd = false;
   static bool flip_ee_x_cmd_last_state = false;
-  static bool flip_ee_y_cmd = false;
-  static bool flip_ee_y_cmd_last_state = false;
-  interbotix_joy_control::JoyControl joy_cmd;
-
-  // Check the gripper_cmd
-  if (msg.buttons.at(cntlr["GRIPPER_CLOSE"]) == 1)
-    joy_cmd.gripper_cmd = interbotix_joy_control::JoyControl::GRIPPER_CLOSE;
-  else if (msg.buttons.at(cntlr["GRIPPER_OPEN"]) == 1)
-    joy_cmd.gripper_cmd = interbotix_joy_control::JoyControl::GRIPPER_OPEN;
-
-  // Check the waist_cmd
-  if (msg.buttons.at(cntlr["WAIST_CCW"]) == 1)
-    joy_cmd.waist_cmd = interbotix_joy_control::JoyControl::WAIST_CCW;
-  else if (msg.buttons.at(cntlr["WAIST_CW"]) == 1)
-    joy_cmd.waist_cmd = interbotix_joy_control::JoyControl::WAIST_CW;
-
-  // Check the robot_pose
-  if (msg.buttons.at(cntlr["HOME_POSE"]) == 1)
-    joy_cmd.robot_pose = interbotix_joy_control::JoyControl::HOME_POSE;
-  else if (msg.buttons.at(cntlr["SLEEP_POSE"]) == 1)
-    joy_cmd.robot_pose = interbotix_joy_control::JoyControl::SLEEP_POSE;
-
-  if (controller_type == "ps3")
-  {
-    // Check the arm_speed_cmd
-    if (msg.buttons.at(cntlr["ARM_HIGH_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_joy_control::JoyControl::ARM_HIGH_SPEED;
-    else if (msg.buttons.at(cntlr["ARM_LOW_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_joy_control::JoyControl::ARM_LOW_SPEED;
-
-    // Check the arm_toggle_speed_cmd
-    if (msg.buttons.at(cntlr["ARM_COURSE_SPEED"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_joy_control::JoyControl::ARM_COURSE_SPEED;
-    else if (msg.buttons.at(cntlr["ARM_FINE_SPEED"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_joy_control::JoyControl::ARM_FINE_SPEED;
-  }
-  else if (controller_type == "ps4")
-  {
-    // Check the arm_speed_cmd
-    if (msg.axes.at(cntlr["ARM_SPEED"]) == 1)
-      joy_cmd.arm_speed_cmd = interbotix_joy_control::JoyControl::ARM_HIGH_SPEED;
-    else if (msg.axes.at(cntlr["ARM_SPEED"]) == -1)
-      joy_cmd.arm_speed_cmd = interbotix_joy_control::JoyControl::ARM_LOW_SPEED;
-
-    // Check the arm_toggle_speed_cmd
-    if (msg.axes.at(cntlr["ARM_SPEED_TYPE"]) == 1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_joy_control::JoyControl::ARM_COURSE_SPEED;
-    else if (msg.axes.at(cntlr["ARM_SPEED_TYPE"]) == -1)
-      joy_cmd.arm_toggle_speed_cmd = interbotix_joy_control::JoyControl::ARM_FINE_SPEED;
-  }
-
-  // Check the gripper_pwm_cmd
-  if (msg.buttons.at(cntlr["GRIPPER_HIGH_PWM"]) == 1)
-    joy_cmd.gripper_pwm_cmd = interbotix_joy_control::JoyControl::GRIPPER_HIGH_PWM;
-  else if (msg.buttons.at(cntlr["GRIPPER_LOW_PWM"]) == 1)
-    joy_cmd.gripper_pwm_cmd = interbotix_joy_control::JoyControl::GRIPPER_LOW_PWM;
+  interbotix_joy_control::ArmJoyControl joy_cmd;
 
   // Check if the ee_x_cmd should be flipped
   if (msg.buttons.at(cntlr["FLIP_EE_X"]) == 1 && flip_ee_x_cmd_last_state == false)
@@ -129,74 +71,115 @@ void joy_state_cb(const sensor_msgs::Joy &msg)
 
   // Check the ee_x_cmd
   if (msg.axes.at(cntlr["EE_X"]) >= threshold && flip_ee_x_cmd == false)
-    joy_cmd.ee_x_cmd = interbotix_joy_control::JoyControl::EE_FORWARD;
+    joy_cmd.ee_x_cmd = interbotix_joy_control::ArmJoyControl::EE_X_INC;
   else if (msg.axes.at(cntlr["EE_X"]) <= -threshold && flip_ee_x_cmd == false)
-    joy_cmd.ee_x_cmd = interbotix_joy_control::JoyControl::EE_BACKWARD;
+    joy_cmd.ee_x_cmd = interbotix_joy_control::ArmJoyControl::EE_X_DEC;
   else if (msg.axes.at(cntlr["EE_X"]) >= threshold && flip_ee_x_cmd == true)
-    joy_cmd.ee_x_cmd = interbotix_joy_control::JoyControl::EE_BACKWARD;
+    joy_cmd.ee_x_cmd = interbotix_joy_control::ArmJoyControl::EE_X_DEC;
   else if (msg.axes.at(cntlr["EE_X"]) <= -threshold && flip_ee_x_cmd == true)
-    joy_cmd.ee_x_cmd = interbotix_joy_control::JoyControl::EE_FORWARD;
-
-  // Check if the ee_y_cmd should be flipped
-  if (msg.buttons.at(cntlr["FLIP_EE_Y"]) == 1 && flip_ee_y_cmd_last_state == false)
-    flip_ee_y_cmd = true;
-  else if (msg.buttons.at(cntlr["FLIP_EE_Y"]) == 1 && flip_ee_y_cmd_last_state == true)
-    flip_ee_y_cmd = false;
-  else if (msg.buttons.at(cntlr["FLIP_EE_Y"]) == 0)
-    flip_ee_y_cmd_last_state = flip_ee_y_cmd;
+    joy_cmd.ee_x_cmd = interbotix_joy_control::ArmJoyControl::EE_X_INC;
 
   // Check the ee_y_cmd
-  if (msg.buttons.at(cntlr["EE_Y_LEFT"]) == 1 && flip_ee_y_cmd == false)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::JoyControl::EE_LEFT;
-  else if (msg.buttons.at(cntlr["EE_Y_RIGHT"]) == 1 && flip_ee_y_cmd == false)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::JoyControl::EE_RIGHT;
-  else if (msg.buttons.at(cntlr["EE_Y_LEFT"]) == 1 && flip_ee_y_cmd == true)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::JoyControl::EE_RIGHT;
-  else if (msg.buttons.at(cntlr["EE_Y_RIGHT"]) == 1 && flip_ee_y_cmd == true)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::JoyControl::EE_LEFT;
+  if (msg.buttons.at(cntlr["EE_Y_INC"]) == 1)
+    joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_INC;
+  else if (msg.buttons.at(cntlr["EE_Y_DEC"]) == 1)
+    joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_DEC;
 
   // Check the ee_z_cmd
   if (msg.axes.at(cntlr["EE_Z"]) >= threshold)
-    joy_cmd.ee_z_cmd = interbotix_joy_control::JoyControl::EE_UP;
+    joy_cmd.ee_z_cmd = interbotix_joy_control::ArmJoyControl::EE_Z_INC;
   else if (msg.axes.at(cntlr["EE_Z"]) <= -threshold)
-    joy_cmd.ee_z_cmd = interbotix_joy_control::JoyControl::EE_DOWN;
+    joy_cmd.ee_z_cmd = interbotix_joy_control::ArmJoyControl::EE_Z_DEC;
 
-  // Check if the wrist_rotate_cmd should be flipped
-  if (msg.buttons.at(cntlr["FLIP_WRIST_ROTATE"]) == 1 && flip_wrist_rotate_cmd_last_state == false)
-    flip_wrist_rotate_cmd = true;
-  else if (msg.buttons.at(cntlr["FLIP_WRIST_ROTATE"]) == 1 && flip_wrist_rotate_cmd_last_state == true)
-    flip_wrist_rotate_cmd = false;
-  else if (msg.buttons.at(cntlr["FLIP_WRIST_ROTATE"]) == 0)
-    flip_wrist_rotate_cmd_last_state = flip_wrist_rotate_cmd;
+  // Check if the ee_roll_cmd should be flipped
+  if (msg.buttons.at(cntlr["FLIP_EE_ROLL"]) == 1 && flip_ee_roll_cmd_last_state == false)
+    flip_ee_roll_cmd = true;
+  else if (msg.buttons.at(cntlr["FLIP_EE_ROLL"]) == 1 && flip_ee_roll_cmd_last_state == true)
+    flip_ee_roll_cmd = false;
+  else if (msg.buttons.at(cntlr["FLIP_EE_ROLL"]) == 0)
+    flip_ee_roll_cmd_last_state = flip_ee_roll_cmd;
 
-  // Check the wrist_rotate_cmd
-  if (msg.axes.at(cntlr["WRIST_ROTATE"]) >= threshold && flip_wrist_rotate_cmd == false)
-    joy_cmd.wrist_rotate_cmd = interbotix_joy_control::JoyControl::WRIST_ROTATE_CW;
-  else if (msg.axes.at(cntlr["WRIST_ROTATE"]) <= -threshold && flip_wrist_rotate_cmd == false)
-    joy_cmd.wrist_rotate_cmd = interbotix_joy_control::JoyControl::WRIST_ROTATE_CCW;
-  else if (msg.axes.at(cntlr["WRIST_ROTATE"]) >= threshold && flip_wrist_rotate_cmd == true)
-    joy_cmd.wrist_rotate_cmd = interbotix_joy_control::JoyControl::WRIST_ROTATE_CCW;
-  else if (msg.axes.at(cntlr["WRIST_ROTATE"]) <= -threshold && flip_wrist_rotate_cmd == true)
-    joy_cmd.wrist_rotate_cmd = interbotix_joy_control::JoyControl::WRIST_ROTATE_CW;
+  // Check the ee_roll_cmd
+  if (msg.axes.at(cntlr["EE_ROLL"]) >= threshold && flip_ee_roll_cmd == false)
+    joy_cmd.ee_roll_cmd = interbotix_joy_control::ArmJoyControl::EE_ROLL_CW;
+  else if (msg.axes.at(cntlr["EE_ROLL"]) <= -threshold && flip_ee_roll_cmd == false)
+    joy_cmd.ee_roll_cmd = interbotix_joy_control::ArmJoyControl::EE_ROLL_CCW;
+  else if (msg.axes.at(cntlr["EE_ROLL"]) >= threshold && flip_ee_roll_cmd == true)
+    joy_cmd.ee_roll_cmd = interbotix_joy_control::ArmJoyControl::EE_ROLL_CCW;
+  else if (msg.axes.at(cntlr["EE_ROLL"]) <= -threshold && flip_ee_roll_cmd == true)
+    joy_cmd.ee_roll_cmd = interbotix_joy_control::ArmJoyControl::EE_ROLL_CW;
 
-  // Check the wrist_angle_cmd
-  if (msg.axes.at(cntlr["WRIST_ANGLE"]) >= threshold)
-    joy_cmd.wrist_angle_cmd = interbotix_joy_control::JoyControl::WRIST_ANGLE_CCW;
-  else if (msg.axes.at(cntlr["WRIST_ANGLE"]) <= -threshold)
-    joy_cmd.wrist_angle_cmd = interbotix_joy_control::JoyControl::WRIST_ANGLE_CW;
+  // Check the ee_pitch_cmd
+  if (msg.axes.at(cntlr["EE_PITCH"]) >= threshold)
+    joy_cmd.ee_pitch_cmd = interbotix_joy_control::ArmJoyControl::EE_PITCH_UP;
+  else if (msg.axes.at(cntlr["EE_PITCH"]) <= -threshold)
+    joy_cmd.ee_pitch_cmd = interbotix_joy_control::ArmJoyControl::EE_PITCH_DOWN;
 
-  // Only publish a JoyControl message if any of the following fields have changed.
-  if (!(prev_joy_cmd.waist_cmd == joy_cmd.waist_cmd &&
-      prev_joy_cmd.ee_z_cmd == joy_cmd.ee_z_cmd &&
+  // Check the waist_cmd
+  if (msg.buttons.at(cntlr["WAIST_CCW"]) == 1)
+    joy_cmd.waist_cmd = interbotix_joy_control::ArmJoyControl::WAIST_CCW;
+  else if (msg.buttons.at(cntlr["WAIST_CW"]) == 1)
+    joy_cmd.waist_cmd = interbotix_joy_control::ArmJoyControl::WAIST_CW;
+
+  // Check the gripper_cmd
+  if (msg.buttons.at(cntlr["GRIPPER_CLOSE"]) == 1)
+    joy_cmd.gripper_cmd = interbotix_joy_control::ArmJoyControl::GRIPPER_CLOSE;
+  else if (msg.buttons.at(cntlr["GRIPPER_OPEN"]) == 1)
+    joy_cmd.gripper_cmd = interbotix_joy_control::ArmJoyControl::GRIPPER_OPEN;
+
+  // Check the robot_pose
+  if (msg.buttons.at(cntlr["HOME_POSE"]) == 1)
+    joy_cmd.robot_pose = interbotix_joy_control::ArmJoyControl::HOME_POSE;
+  else if (msg.buttons.at(cntlr["SLEEP_POSE"]) == 1)
+    joy_cmd.robot_pose = interbotix_joy_control::ArmJoyControl::SLEEP_POSE;
+
+  if (controller_type == "ps3")
+  {
+    // Check the speed_cmd
+    if (msg.buttons.at(cntlr["SPEED_INC"]) == 1)
+      joy_cmd.speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_INC;
+    else if (msg.buttons.at(cntlr["SPEED_DEC"]) == 1)
+      joy_cmd.speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_DEC;
+
+    // Check the toggle_speed_cmd
+    if (msg.buttons.at(cntlr["SPEED_COURSE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_COURSE;
+    else if (msg.buttons.at(cntlr["SPEED_FINE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_FINE;
+  }
+  else if (controller_type == "ps4")
+  {
+    // Check the speed_cmd
+    if (msg.axes.at(cntlr["SPEED"]) == 1)
+      joy_cmd.speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_INC;
+    else if (msg.axes.at(cntlr["SPEED"]) == -1)
+      joy_cmd.speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_DEC;
+
+    // Check the toggle_speed_cmd
+    if (msg.axes.at(cntlr["SPEED_TYPE"]) == 1)
+      joy_cmd.toggle_speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_COURSE;
+    else if (msg.axes.at(cntlr["SPEED_TYPE"]) == -1)
+      joy_cmd.toggle_speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_FINE;
+  }
+
+  // Check the gripper_pwm_cmd
+  if (msg.buttons.at(cntlr["GRIPPER_PWM_INC"]) == 1)
+    joy_cmd.gripper_pwm_cmd = interbotix_joy_control::ArmJoyControl::GRIPPER_PWM_INC;
+  else if (msg.buttons.at(cntlr["GRIPPER_PWM_DEC"]) == 1)
+    joy_cmd.gripper_pwm_cmd = interbotix_joy_control::ArmJoyControl::GRIPPER_PWM_DEC;
+
+  // Only publish a ArmJoyControl message if any of the following fields have changed.
+  if (!(prev_joy_cmd.ee_x_cmd == joy_cmd.ee_x_cmd &&
       prev_joy_cmd.ee_y_cmd == joy_cmd.ee_y_cmd &&
-      prev_joy_cmd.ee_x_cmd == joy_cmd.ee_x_cmd &&
-      prev_joy_cmd.wrist_angle_cmd == joy_cmd.wrist_angle_cmd &&
-      prev_joy_cmd.wrist_rotate_cmd == joy_cmd.wrist_rotate_cmd &&
+      prev_joy_cmd.ee_z_cmd == joy_cmd.ee_z_cmd &&
+      prev_joy_cmd.ee_roll_cmd == joy_cmd.ee_roll_cmd &&
+      prev_joy_cmd.ee_pitch_cmd == joy_cmd.ee_pitch_cmd &&
+      prev_joy_cmd.waist_cmd == joy_cmd.waist_cmd &&
       prev_joy_cmd.gripper_cmd == joy_cmd.gripper_cmd &&
-      prev_joy_cmd.arm_speed_cmd == joy_cmd.arm_speed_cmd &&
-      prev_joy_cmd.arm_toggle_speed_cmd == joy_cmd.arm_toggle_speed_cmd &&
-      prev_joy_cmd.gripper_pwm_cmd == joy_cmd.gripper_pwm_cmd &&
-      prev_joy_cmd.robot_pose == joy_cmd.robot_pose))
+      prev_joy_cmd.robot_pose == joy_cmd.robot_pose &&
+      prev_joy_cmd.speed_cmd == joy_cmd.speed_cmd &&
+      prev_joy_cmd.toggle_speed_cmd == joy_cmd.toggle_speed_cmd &&
+      prev_joy_cmd.gripper_pwm_cmd == joy_cmd.gripper_pwm_cmd))
       pub_joy_cmd.publish(joy_cmd);
   prev_joy_cmd = joy_cmd;
 }
@@ -212,7 +195,7 @@ int main(int argc, char **argv)
   else
     cntlr = ps4;
   sub_joy_raw = n.subscribe("joy", 100, joy_state_cb);
-  pub_joy_cmd = n.advertise<interbotix_joy_control::JoyControl>("joy/commands", 100);
+  pub_joy_cmd = n.advertise<interbotix_joy_control::ArmJoyControl>("joy/commands", 100);
   ros::spin();
   return 0;
 }

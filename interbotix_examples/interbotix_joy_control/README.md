@@ -1,14 +1,14 @@
 # interbotix_joy_control
 
 ## Overview
-This package can be used to control the movements of any of the many X-series robotic arms using a SONY PS3 or PS4 controller via Bluetooth. In this demo, the 'arm' joints are set to work in 'velocity' control mode while the gripper operates in 'PWM' mode. Refer to the joystick button map below to see how to operate the robot. Specifically, some of the joystick controls manipulate individual joints while others are used to perform 'velocity inverse kinematics' on all the joints to get the end-effector of the robot (defined as 'ee_arm_link') to move vertically or horizontally (relative to the 'shoulder_link'). This is done using the [modern_robotics](https://github.com/NxRLab/ModernRobotics/tree/master/packages/Python) code library offered by Northwestern University.
+This package can be used to control the movements of any of the many X-series robotic arms using a SONY PS3 or PS4 controller via Bluetooth. In this demo, the 'arm' joints are set to work in 'position' control mode while the gripper operates in 'PWM' mode. Refer to the joystick button map below to see how to operate the robot. Specifically, some of the joystick controls manipulate individual joints while others are used to perform 'inverse kinematics' on all the joints to get the end-effector of the robot (defined at 'ee_gripper_link') to move as if it's in Cartesian space. This is done using the [modern_robotics](https://github.com/NxRLab/ModernRobotics/tree/master/packages/Python) code library offered by Northwestern University.
 
 ## Structure
 ![joy_control_flowchart](images/joy_control_flowchart.png)
 As shown above, the *interbotix_joy_control* package builds on top of the *interbotix_sdk* package. To get familiar with the nodes in the *interbotix_sdk* package, please look at its README. The other nodes are described below:
 - **joy** - a ROS driver for a generic Linux joystick; it reads data from a SONY PS3 or PS4 controller joystick over Bluetooth and publishes  [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages to the `joy` topic
-- **joy_control_node** - responsible for reading in raw [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages from the `joy` topic and converting them into [JoyControl](msg/JoyControl.msg) messages; this makes the code more readable and allows users to remap buttons very easily later.
-- **joy_robot_control.py** - responsible for reading in [JoyControl](msg/JoyControl.msg) messages and sending joint and gripper commands to the *interbotix_sdk* node; while some joints are directly controlled via the PS3/PS4 joystick, other buttons allow velocity-ik to be performed using all the arm joints.
+- **joy_control_node** - responsible for reading in raw [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages from the `joy` topic and converting them into [ArmJoyControl](msg/ArmJoyControl.msg) messages; this makes the code more readable and allows users to remap buttons very easily later.
+- **joy_robot_control.py** - responsible for reading in [ArmJoyControl](msg/ArmJoyControl.msg) messages and sending joint and gripper commands to the *interbotix_sdk* node; while the 'waist' joint is directly controlled via the PS3/PS4 joystick, other buttons allow position-ik to be performed using all the arm joints.
 
 ## Bluetooth Setup
 #### Sony PS4 Controller (Recommended)
@@ -53,7 +53,7 @@ A red error message might appear in the screen saying `Couldn't open joystick fo
 | -------- | ----------- | :-----------: |
 | robot_name | name of a robot (ex. 'wx200') | "" |
 | threshold | value from 0 to 1 defining joystick sensitivity; a larger number means the joystick should be less sensitive | 0.75 |
-| controller | type of Playstation controller ('ps3' or 'ps4') | ps4 |
+| controller | type of PlayStation controller ('ps3' or 'ps4') | ps4 |
 
 To understand how the joystick buttons map to controlling the robot, look at the diagram and table below:
 
@@ -62,20 +62,20 @@ To understand how the joystick buttons map to controlling the robot, look at the
 | Button | Action |
 | ------ | ------ |
 | START/OPTIONS | move robot arm to its Home pose |
-| PS | move robot arm to its Sleep pose |
+| SELECT/SHARE | move robot arm to its Sleep pose |
 | R2 | rotate the 'waist' joint clockwise |
 | L2 | rotate the 'waist' joint counterclockwise |
 | Triangle | increase gripper PWM in 25 step increments (max is 350) |
 | X | decrease gripper PWM in 25 step increments (min is 150) |
 | O | open gripper |
 | Square | close gripper |
-| D-pad Up | increase motor angular velocity in 0.25 rad/s step increments (max is 2.5 rad/s) |
-| D-pad Down | decrease motor angular velocity in 0.25 rad/s step increments (min is 0.25 rad/s) |
-| D-pad Right | 'Coarse' control - sets motor angular velocity to a user-preset 'fast' speed |
-| D-pad Left | 'Fine' control - sets motor angular velocity to a user-preset 'slow' speed |
-| Right stick Up/Down | rotates the 'wrist_angle' joint CCW/CW |
-| Right stick Left/Right | rotates the 'wrist_rotate' joint CCW/CW |
+| D-pad Up | increase arm speed in 0.25 step increments (max is 3.00) |
+| D-pad Down | decrease arm speed in 0.25 step increments (min is 1.00) |
+| D-pad Left | 'Coarse' control - sets arm speed to a user-preset 'fast' speed |
+| D-pad Right | 'Fine' control - sets arm speed to a user-preset 'slow' speed |
+| Right stick Up/Down | Increase/Decrease pitch of the end-effector |
+| Right stick Left/Right | Increase/Decrease roll of the end-effector |
 | R3 | reverses the Right stick Left/Right control |
-| Left stick Up/Down | move the end-effector (defined at 'ee_arm_link') vertically relative to the 'shoulder_link' |
-| Left stick Left/Right | move the end-effector (defined at 'ee_arm_link') horizontally relative to the 'shoulder_link' |
+| Left stick Up/Down | move the end-effector (defined at 'ee_gripper_link') vertically in Cartesian space |
+| Left stick Left/Right | move the end-effector (defined at 'ee_gripper_link') horizontally in Cartesian space |
 | L3 | reverses the Left stick Left/Right control |
