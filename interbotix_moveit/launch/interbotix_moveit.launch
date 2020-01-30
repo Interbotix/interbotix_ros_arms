@@ -5,6 +5,8 @@
   <arg name="use_actual"                         default="false"/>
   <arg name="use_fake"                           default="false"/>
   <arg name="arm_operating_mode"                 default="position"/>
+  <arg name="arm_profile_velocity"               default="131"/>
+  <arg name="arm_profile_acceleration"           default="15"/>
   <arg name="use_pid_cntlrs"                     default="false"/>
   <arg name="dof"                                default="5"/>
 
@@ -17,8 +19,8 @@
     <arg name="use_default_rviz"                 value="false"/>
     <arg name="use_moveit"                       value="true"/>
     <arg name="arm_operating_mode"               value="$(arg arm_operating_mode)"/>
-    <arg name="arm_profile_velocity"             value="0"/>
-    <arg name="arm_profile_acceleration"         value="0"/>
+    <arg name="arm_profile_velocity"             value="$(arg arm_profile_velocity)"/>
+    <arg name="arm_profile_acceleration"         value="$(arg arm_profile_acceleration)"/>
     <arg name="use_pid_cntlrs"                   value="$(arg use_pid_cntlrs)"/>
   </include>
 
