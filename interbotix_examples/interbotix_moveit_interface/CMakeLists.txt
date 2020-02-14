@@ -71,7 +71,7 @@ add_dependencies(moveit_interface_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${cat
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-install(PROGRAMS
+catkin_install_python(PROGRAMS
   scripts/moveit_interface_gui
   scripts/moveit_python_interface
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

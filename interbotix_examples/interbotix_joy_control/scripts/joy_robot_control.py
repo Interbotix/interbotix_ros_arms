@@ -4,8 +4,8 @@ import rospy
 import threading
 import numpy as np
 import modern_robotics as mr
-import angle_manipulation as ang
-import interbotix_mr_descriptions as mrd
+from interbotix_sdk import angle_manipulation as ang
+from interbotix_descriptions import interbotix_mr_descriptions as mrd
 
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
@@ -24,7 +24,7 @@ class ArmRobotControl(object):
         self.joy_msg = ArmJoyControl()                                                                                  # Incoming message coming from the 'joy_control' node
         self.arm_model = rospy.get_param("~robot_name")                                                                 # Arm-model type
         self.num_joints = self.resp.num_joints                                                                          # Number of joints in the arm
-        self.speed_max = 3.0                                                                                        # Max scaling factor when bumping up joint speed
+        self.speed_max = 3.0                                                                                            # Max scaling factor when bumping up joint speed
         self.gripper_pwm = 200                                                                                          # Initial gripper PWM value
         self.gripper_moving = False                                                                                     # Boolean that is set to 'True' if the gripper is moving - 'False' otherwise
         self.gripper_command = Float64()                                                                                # Float64 message to be sent to the 'gripper' joint

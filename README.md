@@ -53,9 +53,8 @@ $ rosdep update
 $ rosdep install --from-paths src --ignore-src -r -y
 ```
 
-5. There are a couple dependencies that `rosdep` doesn't know about that must be installed manually. One is the [trac_ik](http://wiki.ros.org/trac_ik) ROS package that is used in MoveIt and the other is [modern_robotics](https://github.com/NxRLab/ModernRobotics/tree/master/packages/Python), a robotic manipulation library created at Northwestern University. This package is used in the [interbotix_joy_control](interbotix_examples/interbotix_joy_control) example package to perform velocity-ik on the arm.
+5. There is one dependency that `rosdep` doesn't know about that must be installed manually. Known as [modern_robotics](https://github.com/NxRLab/ModernRobotics/tree/master/packages/Python), a robotic manipulation library created at Northwestern University, this API is used in the [interbotix_joy_control](interbotix_examples/interbotix_joy_control) example package and in the [Interbotix Python API](interbotix_sdk/src/interbotix_sdk/robot_manipulation.py) to perform inverse kinematics on the arm.
 ```
-$ sudo apt install ros-<distro>-trac-ik
 $ sudo apt install python-pip
 $ sudo pip install modern_robotics
 ```

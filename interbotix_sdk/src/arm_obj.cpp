@@ -926,6 +926,10 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
         jnt_tra_msg.joint_names.push_back(joint.name);
 
     cntr = 0;
+    size_t pos_size = msg.points.at(0).positions.size();
+    size_t vel_size = msg.points.at(0).velocities.size();
+    size_t accel_size = msg.points.at(0).accelerations.size();
+
     while(cntr < msg.points.size())
     {
       trajectory_msgs::JointTrajectoryPoint jnt_tra_point_msg;
@@ -934,9 +938,12 @@ void RobotArm::arm_joint_trajectory_msg_callback(const trajectory_msgs::JointTra
       {
         if (joint.name != "gripper")
         {
-          jnt_tra_point_msg.positions.push_back(msg.points.at(cntr).positions.at(joint_order[joint.name]));
-          jnt_tra_point_msg.velocities.push_back(msg.points.at(cntr).velocities.at(joint_order[joint.name]));
-          jnt_tra_point_msg.accelerations.push_back(msg.points.at(cntr).accelerations.at(joint_order[joint.name]));
+          if (pos_size != 0)
+            jnt_tra_point_msg.positions.push_back(msg.points.at(cntr).positions.at(joint_order[joint.name]));
+          if (vel_size != 0)
+            jnt_tra_point_msg.velocities.push_back(msg.points.at(cntr).velocities.at(joint_order[joint.name]));
+          if (accel_size != 0)
+            jnt_tra_point_msg.accelerations.push_back(msg.points.at(cntr).accelerations.at(joint_order[joint.name]));
         }
       }
       jnt_tra_msg.points.push_back(jnt_tra_point_msg);

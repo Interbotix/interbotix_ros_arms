@@ -14,7 +14,7 @@ This package contains the [description.launch](launch/description.launch) file r
 ## Usage
 To run this package, type the line below in a terminal. Note that the `robot_name` argument must be specified as the name of one of the URDF files located in the [urdf](/urdf) directory (excluding the '.urdf.xacro' part). For example, to launch the ReactorX 150 arm, type:
 ```
-$ roslaunch interbotix_descriptions description.launch robot_name:=rx150
+$ roslaunch interbotix_descriptions description.launch robot_name:=rx150 jnt_pub_gui:=true
 ```
 This is the bare minimum needed to get up and running. Take a look at the table below to see how to further customize with other launch file arguments.
 
@@ -22,8 +22,8 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | -------- | ----------- | :-----------: |
 | robot_name | name of a robot (ex. 'arm1/wx200' or 'wx200') | "" |
 | robot_model | only used when launching multiple robots or if `robot_name` contains more than the model type; if that's the case, this should be set to the robot model type (ex. 'wx200'); `robot_name` should then be set to a unique name followed by '$(arg robot_model)' - such as 'arm1/wx200' | '$(arg robot_name)' |
-| use_joint_pub | launches the joint_state_publisher node | true |
-| jnt_pub_gui | launches the joint_state_publisher GUI | true |
+| use_joint_pub | launches the joint_state_publisher node | false |
+| jnt_pub_gui | launches the joint_state_publisher GUI | false |
 | use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 | use_default_gripper_bar | if true, the gripper_bar link is also loaded to the 'robot_description' parameter; if false, the gripper_bar link and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have a custom gripper attachment | true |
 | use_default_gripper_fingers | if true, the gripper fingers are also loaded to the 'robot_description' parameter; if false, the gripper fingers and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have custom gripper fingers | true |

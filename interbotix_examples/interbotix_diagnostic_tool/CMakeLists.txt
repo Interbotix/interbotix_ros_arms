@@ -65,7 +65,7 @@ add_dependencies(diagnostic_tool_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-install(PROGRAMS
+catkin_install_python(PROGRAMS
   scripts/bag2csv.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
