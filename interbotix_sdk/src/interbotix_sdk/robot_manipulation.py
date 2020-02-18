@@ -4,7 +4,6 @@ import threading
 import numpy as np
 import modern_robotics as mr
 from interbotix_sdk import angle_manipulation as ang
-from interbotix_descriptions import interbotix_mr_descriptions as mrd
 
 from std_msgs.msg import Float64
 from sensor_msgs.msg import JointState
@@ -18,19 +17,30 @@ from interbotix_sdk.srv import OperatingModesRequest
 from interbotix_sdk.srv import RegisterValues
 from interbotix_sdk.srv import RegisterValuesRequest
 
-# Python Module that abstracts away the ROS layer and allows easy control of an Interbotix Arm's joints or end-effector
+# Python Module that abstracts away the ROS layer and allows easy control of an Interbotix Robot's joints (including end-effector if present)
 # Notes:
-#       The end-effector frame (a.k.a Body frame) is located at /<robot_name>/ee_gripper_link
-#       The World frame (a.k.a Space frame) is located at /<robot_name>/base_link
+#       - The end-effector frame (a.k.a Body frame) is located at /<robot_name>/ee_gripper_link
+#       - The World frame (a.k.a Space frame) is located at /<robot_name>/base_link
+#       - Module is mainly for operating an Interbotix Arm using 'position' control for the joints, 'pwm' control for the gripper, and the 'use_time_based_profile' launch file argument set to True (corresponds to Time-Based-Profile).
+#         However, it is also possible to use other control methods ('velocity', 'pwm', 'current') to strictly control an Interbotix Arm's joints (NOT end-effector) or Turret, and the 'use_time_based_profile' launch file argument can be set to False (corresponds to Velocity-Based-Profile).
+#       - if using 'Time-Based-Control' (recommended), the parameters used as arguments in the functions below are defined as follows:
+#             * moving_time - time in seconds that it should take for the robot motion to complete ('position' control only)
+#             * accel_time - time in seconds that it should take for the motors to accelerate/decelerate - should never be more than half the moving_time ('position' control only)
+#       - if using 'Velocity-Based-control', the parameters used as argumetns in the functions below are defined as follows:
+#             * moving_time - register value representing the max allowable velocity for joint motion ('position' control only)
+#             * accel_time - register value representing the max allowable acceleration for joint motion ('posiiton' or 'velocity' control only)
+#       - More details at http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108 (look at the 'Profile Acceleration' and 'Profile Velocity' sections)
+
 class InterbotixRobot(object):
 
     ### @brief Constructor for the InterbotixRobot object
     ### @param robot_name - namespace of the interbotix_sdk node
-    ### @param arm_model - one of the robot models listed in the 'interbotix_mr_descriptions.py' module located in the interbotix_descriptions ROS package
-    ### @param moving_time - time in seconds that it should take for the robot motion to complete
-    ### @param accel_time - time in seconds that it should take for the motors to accelerate/decelerate - should never be more than half the moving_time
+    ### @param mrd - module containing the Interbotix Arm Modern Robotics descriptions
+    ### @param robot_model - one of the robot models listed in the urdf directory of the interbotix descriptions package
+    ### @param moving_time - refer to Notes above
+    ### @param accel_time - refer to Notes above
     ### @param gripper_pressure - value from 0 to 1 representing the pressure the gripper should exert when grasping an object
-    def __init__(self, robot_name, arm_model=None, moving_time=2.0, accel_time=0.3, gripper_pressure=0.5):
+    def __init__(self, robot_name, mrd=None, robot_model=None, moving_time=2.0, accel_time=0.3, gripper_pressure=0.5):
         rospy.init_node(robot_name + "_robot_manipulation")                                                                         # Initialize ROS Node
         rospy.wait_for_service(robot_name + "/get_robot_info")                                                                      # Wait for ROS Services to become available
         rospy.wait_for_service(robot_name + "/set_operating_modes")
@@ -39,31 +49,38 @@ class InterbotixRobot(object):
         self.srv_set_op = rospy.ServiceProxy(robot_name + "/set_operating_modes", OperatingModes)
         self.srv_set_register = rospy.ServiceProxy(robot_name + "/set_motor_register_values", RegisterValues)
         self.resp = srv_robot_info()                                                                                                # Get Robot Info like joint limits
+        self.use_time = rospy.get_param(robot_name + "/arm_node/use_time_based_profile")                                            # Determine if 'Drive Mode' is set to 'Time' or 'Velocity'                                                   #
         self.set_trajectory_time(moving_time, accel_time)                                                                           # Change the Profile Velocity/Acceleration Registers in the Arm motors
         self.joint_indx_dict = dict(zip(self.resp.joint_names, range(self.resp.num_single_joints)))                                 # Map joint names to their respective indices in the joint limit lists
-        self.gripper_moving = False                                                                                                 # When in PWM mode, False means the gripper PWM is 0; True means the gripper PWM in nonzero
-        self.gripper_command = Float64()                                                                                            # ROS Message to hold the gripper PWM command
-        self.set_gripper_pressure(gripper_pressure)                                                                                 # Maps gripper pressure to a PWM range
-        self.gripper_index = self.joint_indx_dict["gripper"] + 1                                                                    # Index of the 'left_finger' joint in the JointState message
-        self.initial_guesses = [[0.0] * self.resp.num_joints for i in range(3)]                                                     # Guesses made up of joint values to seed the IK function
-        self.initial_guesses[1][0] = np.deg2rad(-120)
-        self.initial_guesses[2][0] = np.deg2rad(120)
         self.joint_states = None                                                                                                    # Holds the current joint states of the arm
         self.js_mutex = threading.Lock()                                                                                            # Mutex to prevent writing/accessing the joint states variable at the same time
-        if arm_model is None:
-            arm_model = robot_name
-        self.robot_des = getattr(mrd, arm_model)                                                                                    # Contains the Modern Robotics description of the desired arm model
-        self.pub_gripper_command = rospy.Publisher(robot_name + "/gripper/command", Float64, queue_size=100)                        # ROS Publisher to command the gripper
         self.pub_joint_commands = rospy.Publisher(robot_name + "/joint/commands", JointCommands, queue_size=100)                    # ROS Publisher to command the arm
         self.pub_single_command = rospy.Publisher(robot_name + "/single_joint/command", SingleCommand, queue_size=100)              # ROS Publisher to command a specified joint
-        self.pub_joint_traj = rospy.Publisher(robot_name + "/arm_controller/joint_trajectory", JointTrajectory, queue_size=100)     # ROS Pubilsher to command Cartesian trajectories
         self.sub_joint_states = rospy.Subscriber(robot_name + "/joint_states", JointState, self.joint_state_cb)                     # ROS Subscriber to get the current joint states
         while (self.joint_states == None and not rospy.is_shutdown()): pass                                                         # Wait until the first JointState message is received
         self.joint_positions = list(self.joint_states.position[:self.resp.num_joints])                                              # Holds the desired joint positions
-        self.T_sb = mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, self.joint_positions)                                      # Transformation matrix describing the pose of the end-effector w.r.t. the Space frame
-        tmr_controller = rospy.Timer(rospy.Duration(0.02), self.controller)                                                         # ROS Timer to check gripper position
-        rospy.loginfo("\nRobot Name: %s\nArm Model: %s\nMoving Time: %.2f seconds\nAcceleration Time: %.2f seconds\nGripper Pressure: %d%%" % (robot_name, arm_model, moving_time, accel_time, gripper_pressure * 100))
+        if robot_model is None:
+            robot_model = robot_name
+        if (mrd is not None):
+            self.robot_des = getattr(mrd, robot_model)                                                                              # Contains the Modern Robotics description of the desired arm model
+            self.gripper_moving = False                                                                                             # When in PWM mode, False means the gripper PWM is 0; True means the gripper PWM in nonzero
+            self.gripper_command = Float64()                                                                                        # ROS Message to hold the gripper PWM command
+            self.set_gripper_pressure(gripper_pressure)                                                                             # Maps gripper pressure to a PWM range
+            self.gripper_index = self.joint_indx_dict["gripper"] + 1                                                                # Index of the 'left_finger' joint in the JointState message
+            self.initial_guesses = [[0.0] * self.resp.num_joints for i in range(3)]                                                 # Guesses made up of joint values to seed the IK function
+            self.initial_guesses[1][0] = np.deg2rad(-120)
+            self.initial_guesses[2][0] = np.deg2rad(120)
+            self.pub_gripper_command = rospy.Publisher(robot_name + "/gripper/command", Float64, queue_size=100)                    # ROS Publisher to command the gripper
+            self.pub_joint_traj = rospy.Publisher(robot_name + "/arm_controller/joint_trajectory", JointTrajectory, queue_size=100) # ROS Pubilsher to command Cartesian trajectories
+            self.T_sb = mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, self.joint_positions)                                  # Transformation matrix describing the pose of the end-effector w.r.t. the Space frame
+            tmr_controller = rospy.Timer(rospy.Duration(0.02), self.controller)                                                     # ROS Timer to check gripper position
+        if self.use_time:
+            rospy.loginfo("\nRobot Name: %s\nRobot Model: %s\nMoving Time: %.2f seconds\nAcceleration Time: %.2f seconds\nGripper Pressure: %d%%\nDrive Mode: Time-Based-Profile" % (robot_name, robot_model, moving_time, accel_time, gripper_pressure * 100))
+        else:
+            rospy.loginfo("\nRobot Name: %s\nRobot Model: %s\nMax Velocity: %d \nMax Acceleration: %d\nGripper Pressure: %d%%\nDrive Mode: Velocity-Based-Profile" % (robot_name, robot_model, moving_time, accel_time, gripper_pressure * 100))
         rospy.sleep(1)                                                                                                              # Give time for the ROS Publishers to get set up
+
+# ******************************** PRIVATE FUNCTIONS - DO NOT CALL THEM ********************************
 
     ### @brief ROS Subscriber Callback function to update the latest arm joint states
     ### @param msg - latest JointState message
@@ -82,6 +99,52 @@ class InterbotixRobot(object):
                 self.gripper_command.data = 0
                 self.pub_gripper_command.publish(self.gripper_command)
                 self.gripper_moving = False
+
+    ### @brief Helper function used to publish PWM commands to the gripper (when in 'pwm' mode)
+    ### @param pwm - PWM command to send to the gripper motor
+    ### @param delay - number of seconds to wait before returning control to the user
+    def gripper_controller(self, pwm, delay):
+        self.gripper_command.data = pwm
+        with self.js_mutex:
+            gripper_pos = self.joint_states.position[self.gripper_index]
+        if ((self.gripper_command.data > 0 and gripper_pos < self.resp.upper_gripper_limit) or
+            (self.gripper_command.data < 0 and gripper_pos > self.resp.lower_gripper_limit)):
+            self.pub_gripper_command.publish(self.gripper_command)
+            self.gripper_moving = True
+            rospy.sleep(delay)
+
+    ### @brief Helper function to publish joint positions and block if necessary (when in 'position' control mode)
+    ### @param positions - desired joint positions
+    ### @param moving_time - duration in seconds that the robot should move
+    ### @param accel_time - duration in seconds that that robot should spend accelerating/decelerating (must be less than or equal to half the moving_time)
+    ### @param blocking - whether the function should wait to return control to the user until the robot finishes moving
+    def publish_positions(self, positions, moving_time=None, accel_time=None, blocking=True):
+        self.set_trajectory_time(moving_time, accel_time)
+        self.joint_positions = list(positions)
+        joint_commands = JointCommands(positions)
+        self.pub_joint_commands.publish(joint_commands)
+        if blocking:
+            rospy.sleep(self.moving_time)
+        self.T_sb = mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, positions)
+
+    ### @brief Helper function to command the 'Profile_Velocity' and 'Profile_Acceleration' motor registers (when in 'position' control)
+    ### @param moving_time - refer to Notes above
+    ### @param accel_time - refer to Notes above
+    def set_trajectory_time(self, moving_time=None, accel_time=None):
+        if (moving_time != None):
+            self.moving_time = moving_time
+            if self.use_time:
+                self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=int(moving_time * 1000))
+            else:
+                self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=int(moving_time))
+        if (accel_time != None):
+            self.accel_time = accel_time
+            if self.use_time:
+                self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Acceleration", value=int(accel_time * 1000))
+            else:
+                self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Acceleration", value=int(accel_time))
+
+# ******************************** PUBLIC FUNCTIONS IF CONTROLLING AN INTERBOTIX ARM (NOT TURRET)  ********************************
 
     ### @brief Command positions to the arm joints (when in 'position' control mode)
     ### @param joint_positions - desired joint positions [rad] excluding gripper
@@ -251,24 +314,21 @@ class InterbotixRobot(object):
 
         return success
 
-    ### @brief Set the joints to a different operating mode - Note: by default, joints start in 'position' control mode
-    ### @param mode - either "position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
-    def set_joint_operating_mode(self, mode):
-        self.srv_set_op(cmd=OperatingModesRequest.ARM_JOINTS, mode=mode)
+    ### @brief Set the amount of pressure that the gripper should use when grasping an object (when in 'pwm' control mode)
+    ### @param pressure - a scaling factor from 0 to 1 where the pressure increases as the factor increases
+    ### @details - the PWM range goes from 150 - 350. Anything higher and the gripper runs the risk of overloading
+    def set_gripper_pressure(self, pressure):
+        self.gripper_pwm = 150 + int(pressure * 200)
 
-    ### @brief Command the joints (when not in 'position' control mode)
-    ### @param commands - the type of commands corresponds to the joint operating mode
-    ### @param delay - number of seconds to delay while the robot moves
-    ### @details - if "pwm", values range from -885 to +885
-    ###            if "velocity", values typically range from -3.14 to +3.14 [rad/s]
-    ###            if "current", values range from -3000 to +3000 [mA]
-    ###            if "position", values can range from -3.14 to +3.14 [rad] - however,
-    ###            the 'set_joint_positions' function should be used in this case
-    def set_joint_commands(self, commands, delay=0):
-        joint_commands = JointCommands(commands)
-        self.pub_joint_commands.publish(joint_commands)
-        if (delay > 0):
-            rospy.sleep(delay)
+    ### @brief Opens the gripper (when in 'pwm' control mode)
+    ### @param delay - number of seconds to delay before returning control to the user
+    def open_gripper(self, delay=1.0):
+        self.gripper_controller(self.gripper_pwm, delay)
+
+    ### @brief Closes the gripper (when in 'pwm' control mode)
+    ### @param delay - number of seconds to delay before returning control to the user
+    def close_gripper(self, delay=1.0):
+        self.gripper_controller(-self.gripper_pwm, delay)
 
     ### @brief Set the gripper to a different operating mode - Note: by default, the gripper starts in 'pwm' control mode
     ### @param mode - either "position", "ext_position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
@@ -294,29 +354,6 @@ class InterbotixRobot(object):
         if (delay > 0):
             rospy.sleep(delay)
 
-    ### @brief Set the amount of pressure that the gripper should use when grasping an object (when in 'pwm' control mode)
-    ### @param pressure - a scaling factor from 0 to 1 where the pressure increases as the factor increases
-    ### @details - the PWM range goes from 150 - 350. Anything higher and the gripper runs the risk of overloading
-    def set_gripper_pressure(self, pressure):
-        self.gripper_pwm = 150 + int(pressure * 200)
-
-    ### @brief Opens the gripper (when in 'pwm' control mode)
-    ### @param delay - number of seconds to delay before returning control to the user
-    def open_gripper(self, delay=1.0):
-        self.gripper_controller(self.gripper_pwm, delay)
-
-    ### @brief Closes the gripper (when in 'pwm' control mode)
-    ### @param delay - number of seconds to delay before returning control to the user
-    def close_gripper(self, delay=1.0):
-        self.gripper_controller(-self.gripper_pwm, delay)
-
-    ### @brief Returns a list containing the positions of the arm joints (excluding the gripper)
-    ### @param positions [out] - current joint positions [rad]
-    def get_joint_positions(self):
-        with self.js_mutex:
-            positions = self.joint_states.position[:self.num_joints]
-        return positions
-
     ### @brief Returns a floating point number containing the linear distance between the two gripper fingers
     ### @param <float> [out] - linear distance between the gripper fingers [m]
     def get_gripper_position(self):
@@ -324,41 +361,46 @@ class InterbotixRobot(object):
             gripper_pos = self.joint_states.position[self.gripper_index]
         return gripper_pos * 2.0
 
-    ### @brief Helper function used to publish PWM commands to the gripper (when in 'pwm' mode)
-    ### @param pwm - PWM command to send to the gripper motor
-    ### @param delay - number of seconds to wait before returning control to the user
-    def gripper_controller(self, pwm, delay):
-        self.gripper_command.data = pwm
-        with self.js_mutex:
-            gripper_pos = self.joint_states.position[self.gripper_index]
-        if ((self.gripper_command.data > 0 and gripper_pos < self.resp.upper_gripper_limit) or
-            (self.gripper_command.data < 0 and gripper_pos > self.resp.lower_gripper_limit)):
-            self.pub_gripper_command.publish(self.gripper_command)
-            self.gripper_moving = True
+# ******************************** PUBLIC FUNCTIONS IF CONTROLLING AN INTERBOTIX ARM OR TURRET ********************************
+
+    ### @brief Set the joints to a different operating mode - Note: by default, joints start in 'position' control mode
+    ### @param mode - either "position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
+    def set_joint_operating_mode(self, mode):
+        self.srv_set_op(cmd=OperatingModesRequest.ARM_JOINTS, mode=mode)
+
+    ### @brief Command the joints
+    ### @param commands - the type of commands corresponds to the joint operating mode
+    ### @param moving_time - refer to Notes above
+    ### @param accel_time - refer to Notes above
+    ### @param delay - number of seconds to delay while the robot moves
+    ### @details - if "pwm", values range from -885 to +885
+    ###            if "velocity", values typically range from -3.14 to +3.14 [rad/s]
+    ###            if "current", values range from -3000 to +3000 [mA]
+    ###            if "position", values can range from -3.14 to +3.14 [rad]
+    def set_joint_commands(self, commands, moving_time=None, accel_time=None, delay=0):
+        self.set_trajectory_time(moving_time, accel_time)
+        joint_commands = JointCommands(commands)
+        self.pub_joint_commands.publish(joint_commands)
+        if (delay > 0):
             rospy.sleep(delay)
 
-    ### @brief Helper function to publish joint positions and block if necessary (when in 'position' control mode)
-    ### @param positions - desired joint positions
-    ### @param moving_time - duration in seconds that the robot should move
-    ### @param accel_time - duration in seconds that that robot should spend accelerating/decelerating (must be less than or equal to half the moving_time)
-    ### @param blocking - whether the function should wait to return control to the user until the robot finishes moving
-    def publish_positions(self, positions, moving_time=None, accel_time=None, blocking=True):
+    ### @brief Command a single joint with a specific value
+    ### @param joint_name - name of the joint to control
+    ### @param command - desired command
+    ### @param moving_time - refer to Notes above
+    ### @param accel_time - refer to Notes above
+    ### @param delay - number of seconds to delay while the robot moves
+    ### @details - Note that if moving_time or accel_time is specified, the changes affect ALL the joints, not just the specified one
+    def set_single_joint_command(self, joint_name, command, moving_time=None, accel_time=None, delay=0):
         self.set_trajectory_time(moving_time, accel_time)
-        self.joint_positions = list(positions)
-        joint_commands = JointCommands(positions)
-        self.pub_joint_commands.publish(joint_commands)
-        if blocking:
-            rospy.sleep(self.moving_time)
-        self.T_sb = mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, positions)
+        single_command = SingleCommand(joint_name, command)
+        self.pub_single_command.publish(single_command)
+        if delay > 0:
+            rospy.sleep(delay)
 
-    ### @brief Helper function to set the amount of time it takes for the robot to execute a movement (when in 'position' control)
-    ### @param moving_time - total time it should take for the robot to move [seconds]
-    ### @param accel_time - time it should take for the joints to accelerate/decelerate [seconds]
-    ### @details - accel_time must be less than or equal to half the moving_time
-    def set_trajectory_time(self, moving_time, accel_time=0.3):
-        if (moving_time != None):
-            self.moving_time = moving_time
-            self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Velocity", value=int(moving_time * 1000))
-        if (accel_time != None):
-            self.accel_time = accel_time
-            self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Acceleration", value=int(accel_time * 1000))
+    ### @brief Returns a list containing the positions of the arm joints (excluding the gripper)
+    ### @param positions [out] - current joint positions [rad]
+    def get_joint_positions(self):
+        with self.js_mutex:
+            positions = self.joint_states.position[:self.num_joints]
+        return positions
