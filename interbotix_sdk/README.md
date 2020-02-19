@@ -7,7 +7,7 @@ Besides for the directories typically found in a ROS package, there is also a [c
 
 ## Structure
 
-![interbotix_sdk_flowchart](images/interbotix_sdk_flowchart.png)
+![sdk_flowchart](images/sdk_flowchart.png)
 As shown in the image above, the *interbotix_sdk* package builds on top of the *interbotix_descriptions* package. To get familiar with the nodes not described below, just hop over to the ROS package in this repo that launches them. In total, the *interbotix_sdk* only launches one node called **arm_node**. As mentioned previously, this node is responsible for controlling the physical robot. Please look below for a description of the ROS topics, services, actions, and parameters available to the user.
 
 ##### Publishers
@@ -75,7 +75,8 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | gripper_operating_mode | desired operating mode for the gripper. This can be "position", "ext_position" "velocity", "pwm", "current", or "none". Note that only the ViperX robots support "current" control. Also, "ext_position" is equivalent to "position" control but allows multiple rotations. Only use this with a custom gripper that can do more than one revolution | position |
 | gripper_profile_velocity | sets the max velocity limit for the gripper joint; refer to 'arm_profile_velocity' above | 0 |
 | gripper_profile_acceleration | sets the max acceleration limit for the gripper joint; refer to 'arm_profile_acceleration' above | 0 |
-| use_moveit | set this to 'true' if MoveIt is being used; it makes sure to also load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot arm | false |
+| use_moveit | set this to 'true' if MoveIt is being used; it loads the FollowJointTrajectory Action servers for the arm and gripper | false |
+| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
 | use_pid_cntlrs | set this to 'true' if you are commanding trajectories to the arm joints (via MoveIt or the trajectory topic) and would like to run PID controllers to make the motors better track the desired states. Refer to any file in the [pid_config](pid_config/) directory for a deeper explanation. Note that the 'arm_operating_mode' must be set to 'velocity' for this to work | false |
 | use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | false |
 
@@ -99,6 +100,7 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | turret_operating_mode | desired operating mode for the turret joints; this can be "position", "velocity", "pwm", "current", or "none"; note that the PhantomX turret does not support "current" control | position |
 | turret_profile_velocity | register value describing the time span that it should take for the joints to move; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-velocity112); if doing 'position' control, setting this to '1000' would mean it would take 1000 ms for the turret to get to the desired position. to have an 'infinite' max limit, set this to '0' | 0 |
 | turret_profile_acceleration | register value describing the time span it should take for the joints to accelerate; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108); if doing 'velocity' control, setting this to 100 would mean it would take 100 ms for the turret joints to get to their desired velocity; to get very fast motion, set this to '0'. | 0 |
+| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
 | use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | true |
 
 ## Troubleshooting Notes

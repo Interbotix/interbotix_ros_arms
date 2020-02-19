@@ -4,10 +4,19 @@
   <xacro:arg name="robot_name" default = ""/>
   <xacro:arg name="external_gripper_urdf" default="false"/>
   <xacro:arg name="external_gripper_urdf_loc" default=""/>
-
+  <xacro:arg name="world_frame" default="false"/>
+  
   <material name="interbotix_black">
     <texture filename="package://interbotix_descriptions/meshes/interbotix_black.png"/>
   </material>
+
+  <xacro:if value="$(arg world_frame)">
+    <link name="world"/>
+    <joint name="fixed" type="fixed">
+      <parent link="world"/>
+      <child link="$(arg robot_name)/base_link"/>
+    </joint>
+  </xacro:if>
 
   <link name="$(arg robot_name)/base_link">
     <visual>

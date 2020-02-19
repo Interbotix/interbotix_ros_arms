@@ -7,7 +7,7 @@
   <xacro:arg name="external_gripper_urdf" default="false"/>
   <xacro:arg name="external_gripper_urdf_loc" default=""/>
   <xacro:arg name="gazebo" default="false"/>
-  <xacro:arg name="moveit" default="false"/>
+  <xacro:arg name="world_frame" default="false"/>
 
   <xacro:if value="$(arg gazebo)">
     <xacro:include filename="$(find interbotix_gazebo)/config/interbotix_texture.gazebo"/>
@@ -17,7 +17,7 @@
     <texture filename="package://interbotix_descriptions/meshes/interbotix_black.png"/>
   </material>
 
-  <xacro:if value="$(arg moveit)">
+  <xacro:if value="$(arg world_frame)">
     <link name="world"/>
     <joint name="fixed" type="fixed">
       <parent link="world"/>

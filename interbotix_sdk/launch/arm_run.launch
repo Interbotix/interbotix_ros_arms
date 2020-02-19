@@ -14,6 +14,7 @@
   <arg name="gripper_profile_velocity"          default="0"/>
   <arg name="gripper_profile_acceleration"      default="0"/>
   <arg name="use_moveit"                        default="false"/>
+  <arg name="use_world_frame"                   default="true"/>
   <arg name="use_pid_cntlrs"                    default="false"/>
   <arg name="use_time_based_profile"            default="false"/>
 
@@ -26,7 +27,7 @@
     <arg name="use_external_gripper_urdf"       value="$(arg use_external_gripper_urdf)"/>
     <arg name="external_gripper_urdf_loc"       value="$(arg external_gripper_urdf_loc)"/>
     <arg name="load_gazebo_material"            value="false"/>
-    <arg name="use_moveit"                      value="$(arg use_moveit)"/>
+    <arg name="use_world_frame"                 value="$(arg use_world_frame)"/>
     <arg name="use_default_rviz"                value="$(arg use_default_rviz)"/>
   </include>
 

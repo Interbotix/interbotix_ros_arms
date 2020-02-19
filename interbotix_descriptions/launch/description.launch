@@ -10,7 +10,7 @@
   <arg name="use_external_gripper_urdf"     default="false"/>
   <arg name="external_gripper_urdf_loc"     default=""/>
   <arg name="load_gazebo_material"          default="false"/>
-  <arg name="use_moveit"                    default="false"/>
+  <arg name="use_world_frame"               default="true"/>
   <arg name="rvizconfig"                    default="$(find interbotix_descriptions)/rviz/description.rviz" />
   <arg name="model"                         default="$(find interbotix_descriptions)/urdf/$(arg robot_model).urdf.xacro
                                                      robot_name:=$(arg robot_name)
@@ -19,7 +19,7 @@
                                                      external_gripper_urdf:=$(arg use_external_gripper_urdf)
                                                      external_gripper_urdf_loc:=$(arg external_gripper_urdf_loc)
                                                      gazebo:=$(arg load_gazebo_material)
-                                                     moveit:=$(arg use_moveit)"/>
+                                                     world_frame:=$(arg use_world_frame)"/>
 
   <param name="$(arg robot_name)/robot_description"  command="$(find xacro)/xacro --inorder $(arg model)" />
 
@@ -44,22 +44,11 @@
     ns="$(arg robot_name)">
   </node>
 
-  <group if="$(arg use_default_rviz)">
-
-    <node
-      name="rviz"
-      pkg="rviz"
-      type="rviz"
-      args="-d $(arg rvizconfig)"
-      required="true"
-      ns="$(arg robot_name)"/>
-
-    <node
-      name="robot_transform_broadcaster"
-      pkg="tf2_ros"
-      type="static_transform_publisher"
-      args="0 0 0 0 0 0 /world /$(arg robot_name)/base_link"/>
-
-  </group>
+  <node if="$(arg use_default_rviz)"
+    name="rviz"
+    pkg="rviz"
+    type="rviz"
+    args="-d $(arg rvizconfig)"
+    ns="$(arg robot_name)"/>
 
 </launch>

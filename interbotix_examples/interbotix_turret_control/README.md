@@ -6,7 +6,7 @@ This package can be used to control the motion of any of the five [X-series turr
 Regarding naming conventions, there are three parts to a turret's name. The first two letters correspond to the robot model name. For example, the 'WidowX' platform is signified by 'wx'. The next two letters describe the type of motor used in the turret. There are only two choices available: 'xl' and 'xm'. Finally, the last letter signifies if the 'tilt' joint is composed of a single motor ('s') or dual motors ('d'). Thus, the 'PhantomX XL430 Robot Turret' can be abbreviated as 'pxxls'.
 
 ## Structure
-![turret_control_flowchart](images/interbotix_turret_control_flowchart.png)
+![turret_control_flowchart](images/turret_control_flowchart.png)
 As shown above, the *interbotix_turret_control* package builds on top of the *interbotix_sdk* package. To get familiar with the nodes in the *interbotix_sdk* package, please look at its README. The other nodes are described below:
 - **joy** - a ROS driver for a generic Linux joystick; it reads data from a SONY PS3 or PS4 controller joystick over Bluetooth and publishes  [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages to the `joy` topic
 - **turret_control_joy_node** - responsible for reading in raw [sensor_msgs/Joy](http://docs.ros.org/melodic/api/sensor_msgs/html/msg/Joy.html) messages from the `joy` topic and converting them into [TurretJoyControl](msg/TurretJoyControl.msg) messages; this makes the code more readable and allows users to remap buttons very easily later.

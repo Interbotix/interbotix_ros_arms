@@ -7,6 +7,7 @@
   <arg name="recording"                     default="false"/>
   <arg name="debug"                         default="false"/>
   <arg name="robot_name"                    default=""/>
+  <arg name="use_world_frame"               default="true"/>
   <arg name="use_default_rviz"              default="false"/>
   <arg name="use_default_gripper_bar"       default="true"/>
   <arg name="use_default_gripper_fingers"   default="true"/>
@@ -44,7 +45,7 @@
     <arg name="use_external_gripper_urdf"     value="$(arg use_external_gripper_urdf)"/>
     <arg name="external_gripper_urdf_loc"     value="$(arg external_gripper_urdf_loc)"/>
     <arg name="load_gazebo_material"          value="true"/>
-    <arg name="use_moveit"                    value="true"/>
+    <arg name="use_world_frame"               value="$(arg use_world_frame)"/>
     <arg name="use_default_rviz"              value="$(arg use_default_rviz)"/>
   </include>
 
