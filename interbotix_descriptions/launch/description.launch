@@ -10,7 +10,7 @@
   <arg name="use_external_gripper_urdf"     default="false"/>
   <arg name="external_gripper_urdf_loc"     default=""/>
   <arg name="load_gazebo_material"          default="false"/>
-  <arg name="use_world_frame"               default="true"/>
+  <arg name="use_world_frame"               default="false"/>
   <arg name="rvizconfig"                    default="$(find interbotix_descriptions)/rviz/description.rviz" />
   <arg name="model"                         default="$(find interbotix_descriptions)/urdf/$(arg robot_model).urdf.xacro
                                                      robot_name:=$(arg robot_name)

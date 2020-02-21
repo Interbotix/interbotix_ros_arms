@@ -7,20 +7,17 @@
   <arg name="arm_operating_mode"                 default="position"/>
   <arg name="arm_profile_velocity"               default="131"/>
   <arg name="arm_profile_acceleration"           default="15"/>
-  <arg name="use_world_frame"                    default="true"/>
   <arg name="use_pid_cntlrs"                     default="false"/>
   <arg name="dof"                                default="5"/>
 
   <include if="$(arg use_gazebo)" file="$(find interbotix_gazebo)/launch/gazebo.launch">
     <arg name="robot_name"                       value="$(arg robot_name)"/>
-    <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
   </include>
 
   <include if="$(arg use_actual)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                       value="$(arg robot_name)"/>
     <arg name="use_default_rviz"                 value="false"/>
     <arg name="use_moveit"                       value="true"/>
-    <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
     <arg name="arm_operating_mode"               value="$(arg arm_operating_mode)"/>
     <arg name="arm_profile_velocity"             value="$(arg arm_profile_velocity)"/>
     <arg name="arm_profile_acceleration"         value="$(arg arm_profile_acceleration)"/>
@@ -32,7 +29,6 @@
     <include file="$(find interbotix_descriptions)/launch/description.launch">
       <arg name="robot_name"                       value="$(arg robot_name)"/>
       <arg name="use_default_rviz"                 value="false"/>
-      <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
       <arg name="use_joint_pub"                    value="false"/>
     </include>
 
@@ -54,6 +50,7 @@
   </include>
 
   <include file="$(find interbotix_moveit)/launch/moveit_rviz.launch" ns="$(arg robot_name)">
+    <arg name="robot_name"                       value="$(arg robot_name)"/>
     <arg name="config"                           value="true"/>
   </include>
 

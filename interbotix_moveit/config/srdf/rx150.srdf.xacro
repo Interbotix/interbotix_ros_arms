@@ -18,7 +18,6 @@
         <joint name="wrist_angle" />
         <joint name="wrist_rotate" />
         <joint name="ee_arm" />
-        <joint name="fixed" />
     </group>
     <group name="interbotix_gripper">
         <link name="$(arg robot_name)/gripper_bar_link" />

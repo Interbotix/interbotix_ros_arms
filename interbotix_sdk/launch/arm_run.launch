@@ -14,7 +14,7 @@
   <arg name="gripper_profile_velocity"          default="0"/>
   <arg name="gripper_profile_acceleration"      default="0"/>
   <arg name="use_moveit"                        default="false"/>
-  <arg name="use_world_frame"                   default="true"/>
+  <arg name="use_world_frame"                   default="false"/>
   <arg name="use_pid_cntlrs"                    default="false"/>
   <arg name="use_time_based_profile"            default="false"/>
 

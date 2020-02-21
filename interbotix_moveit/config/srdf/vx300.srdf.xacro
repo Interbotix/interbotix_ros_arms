@@ -12,7 +12,6 @@
     <xacro:arg name="robot_name" default=""/>
 
     <group name="interbotix_arm">
-        <joint name="fixed" />
         <joint name="waist" />
         <joint name="shoulder" />
         <joint name="elbow" />
