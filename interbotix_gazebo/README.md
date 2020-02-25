@@ -24,15 +24,15 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 
 | Argument | Description | Default Value |
 | -------- | ----------- | :-----------: |
-| paused | start Gazebo in a paused state | true |
-| use_sim_time | tells ROS nodes asking for time to get the Gazebo-published simulation time, published over the ROS topic /clock | true |
-| gui | launch the Gazebo GUI | true |
-| recording | enable Gazebo state log recording | false |
-| debug | Start gzserver in debug mode using gdb | false |
 | robot_name | name of a robot (ex. 'wx200') | "" |
-| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
-| use_default_rviz | launches the rviz and static_transform_publisher nodes | false |
+| robot_model | only used when launching multiple robots or if `robot_name` contains something other than the model type; if that's the case, this should be set to the robot model type (ex. 'wx200') | '$(arg robot_name)' |
 | use_default_gripper_bar | if true, the gripper_bar link is also loaded to the 'robot_description' parameter; if false, the gripper_bar link and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have a custom gripper attachment | true |
 | use_default_gripper_fingers | if true, the gripper fingers are also loaded to the 'robot_description' parameter; if false, the gripper fingers and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have custom gripper fingers | true |
-| use_external_gripper_urdf | if you have a URDF of a custom gripper attachment, set this to 'true' | false |
-| external_gripper_urdf_loc | set the file path to where your custom gripper attachment URDF is located | "" |
+| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
+| external_urdf_loc | the file path to the custom urdf.xacro file that you would like to include in the Interbotix robot's urdf.xacro file| "" |
+| use_default_rviz | launches the rviz and static_transform_publisher nodes | false |
+| gui | launch the Gazebo GUI | true |
+| debug | Start gzserver in debug mode using gdb | false |
+| paused | start Gazebo in a paused state | true |
+| recording | enable Gazebo state log recording | false |
+| use_sim_time | tells ROS nodes asking for time to get the Gazebo-published simulation time, published over the ROS topic /clock | true |

@@ -225,8 +225,8 @@ private:
     double gripper_max_effort;                                  // Max allowable gripper effort in mA before the gripper MoveIt trajectory is preempted
     double gripper_start_time;                                  // ROS start time for the gripper trajectory
     bool execute_gripper_traj;                                  // True if the gripper trajectory should be executed - False otherwise
-    bool default_gripper_bar;                                   // True if the gripper_bar_link in the URDF was loaded - False otherwise
-    bool default_gripper_fingers;                               // True if the gripper fingers in the URDF were loaded - False otherwise
+    bool use_default_gripper_bar;                               // True if the gripper_bar_link in the URDF was loaded - False otherwise
+    bool use_default_gripper_fingers;                           // True if the gripper fingers in the URDF were loaded - False otherwise
     bool use_gripper;                                           // True if the 'gripper' motor exists in the motor config file - False otherwise
 
     /// @brief Initializes the port to talk to the Dynamixel motors

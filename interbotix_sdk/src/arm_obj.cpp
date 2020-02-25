@@ -672,8 +672,8 @@ void RobotArm::arm_init_operating_modes(void)
 /// @details - Used to set correct dimensions for the slider-crank mechanism that operates the gripper
 void RobotArm::arm_init_gripper(void)
 {
-  ros::param::param<bool>("~default_gripper_bar", default_gripper_bar, false);
-  ros::param::param<bool>("~default_gripper_fingers", default_gripper_fingers, false);
+  ros::param::param<bool>("~use_default_gripper_bar", use_default_gripper_bar, false);
+  ros::param::param<bool>("~use_default_gripper_fingers", use_default_gripper_fingers, false);
 
   if (robot_model.find("300") != std::string::npos)
   {
@@ -1034,7 +1034,7 @@ bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, inter
   for (auto const& joint:all_joints)
   {
     urdf::JointConstSharedPtr ptr;
-    if (joint.name == "gripper" && default_gripper_bar && default_gripper_fingers)
+    if (joint.name == "gripper" && use_default_gripper_bar && use_default_gripper_fingers)
     {
       ptr = model.getJoint("left_finger");
       res.lower_gripper_limit = ptr->limits->lower;
@@ -1361,7 +1361,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
       joint_state_msg.velocity.push_back(velocity);
       joint_state_msg.position.push_back(position);
       // If reading the 'gripper' motor, make sure to also add the finger positions in meters
-      if (joint.name == "gripper" && default_gripper_bar && default_gripper_fingers)
+      if (joint.name == "gripper" && use_default_gripper_bar && use_default_gripper_fingers)
       {
         joint_state_msg.name.push_back("left_finger");
         joint_state_msg.name.push_back("right_finger");
@@ -1411,7 +1411,7 @@ void RobotArm::arm_update_joint_states(const ros::TimerEvent &e)
       joint_state_msg.velocity.push_back(velocity);
       joint_state_msg.position.push_back(position);
       // If reading the 'gripper' motor, make sure to also add the finger positions in meters
-      if (joint.name == "gripper" && default_gripper_bar && default_gripper_fingers)
+      if (joint.name == "gripper" && use_default_gripper_bar && use_default_gripper_fingers)
       {
         joint_state_msg.name.push_back("left_finger");
         joint_state_msg.name.push_back("right_finger");

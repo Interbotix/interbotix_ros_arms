@@ -22,14 +22,13 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | -------- | ----------- | :-----------: |
 | robot_name | name of a robot (ex. 'arm1/wx200' or 'wx200') | "" |
 | robot_model | only used when launching multiple robots or if `robot_name` contains more than the model type; if that's the case, this should be set to the robot model type (ex. 'wx200'); `robot_name` should then be set to a unique name followed by '$(arg robot_model)' - such as 'arm1/wx200' | '$(arg robot_name)' |
-| use_joint_pub | launches the joint_state_publisher node | false |
-| jnt_pub_gui | launches the joint_state_publisher GUI | false |
-| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 | use_default_gripper_bar | if true, the gripper_bar link is also loaded to the 'robot_description' parameter; if false, the gripper_bar link and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have a custom gripper attachment | true |
 | use_default_gripper_fingers | if true, the gripper fingers are also loaded to the 'robot_description' parameter; if false, the gripper fingers and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have custom gripper fingers | true |
-| use_external_gripper_urdf | if you have a URDF of a custom gripper attachment, set this to 'true' | false |
-| external_gripper_urdf_loc | set the file path to where your custom gripper attachment URDF is located | "" |
-| load_gazebo_material | set this to 'true' if Gazebo is being used; it makes sure to also load Gazebo related configs to the 'robot_description' parameter so that the robot models show up black in Gazebo | false |
 | use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
+| external_urdf_loc | the file path to the custom urdf.xacro file that you would like to include in the Interbotix robot's urdf.xacro file| "" |
+| load_gazebo_configs | set this to 'true' if Gazebo is being used; it makes sure to also load Gazebo related configs to the 'robot_description' parameter so that the robot models show up black in Gazebo | false |
+| jnt_pub_gui | launches the joint_state_publisher GUI | false |
+| use_joint_pub | launches the joint_state_publisher node | false |
+| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 | rvizconfig | file path to the config file Rviz should load | refer to [description.launch](launch/description.launch) |
 | model | file path to the robot-specific URDF including arguments to be passed in | refer to [description.launch](launch/description.launch) |

@@ -63,6 +63,7 @@ $ sudo pip install modern_robotics
 ```
 $ cd ~/interbotix_ws
 $ catkin_make
+$ source ~/.bashrc
 ```
 
 7. Copy over the udev rules to the right directory. The rules create a symlink for the port to which the U2D2 is connected. This ensures that the computer always 'recognizes' the U2D2. It also reduces USB latency to 1 ms so that there is minimal lag during communication. Afterwards, reload and trigger the updated udev rules.
@@ -79,7 +80,7 @@ $ ls
 
 9. Get familiar with the virtual robot model by launching it in Rviz and playing with the joint_state_publisher. Note that you must specify which robot model is being used as a command line argument. For example, the WidowX 200 robot arm can be launched as follows:
 ```
-$ roslaunch interbotix_descriptions description.launch robot_name:=wx200
+$ roslaunch interbotix_descriptions description.launch robot_name:=wx200 jnt_pub_gui:=true
 ```
 
 10. Get familiar with the physical robot arm (let's say... a ViperX 250!) by executing the following command in the terminal (Cntrl-C from Step 9 first):
