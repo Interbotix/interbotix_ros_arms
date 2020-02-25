@@ -64,11 +64,8 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | robot_name | name of a robot (ex. 'arm1/wx200' or 'wx200') | "" |
 | robot_model | only used when launching multiple robots or if `robot_name` contains something other than the model type; if that's the case, this should be set to the robot model type (ex. 'wx200') | '$(arg robot_name)' |
 | port | the USB port to which the robot is connected | /dev/ttyDXL |
-| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 | use_default_gripper_bar | if true, the gripper_bar link is also loaded to the 'robot_description' parameter; if false, the gripper_bar link and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have a custom gripper attachment | true |
 | use_default_gripper_fingers | if true, the gripper fingers are also loaded to the 'robot_description' parameter; if false, the gripper fingers and any other link past it in the kinematic chain is not loaded to the parameter server. Set to 'false' if you have custom gripper fingers | true |
-| use_external_gripper_urdf | if you have a URDF of a custom gripper attachment, set this to 'true' | false |
-| external_gripper_urdf_loc | set the file path to where your custom gripper attachment URDF is located | "" |
 | arm_operating_mode | desired operating mode for the robot joints (excluding gripper); this can be "position", "velocity", "pwm", "current", or "none". Note that only the ViperX robots support "current" control | position |
 | arm_profile_velocity | register value describing the max velocity limit for the robot joints (excluding gripper); refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-velocity112). If doing 'position' control, setting this to '131' would be equivalent to a limit of 3.14 rad/s. To have an 'infinite' max limit, set this to '0' | 131 |
 | arm_profile_acceleration | register value describing the max acceleration limit for the robot joints (excluding gripper); refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108). If doing 'position' or 'velocity' control, setting this to '15' seems to give smooth but quick movement. To get very fast motion, set this to '0' | 15 |
@@ -76,10 +73,11 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | gripper_profile_velocity | sets the max velocity limit for the gripper joint; refer to 'arm_profile_velocity' above | 0 |
 | gripper_profile_acceleration | sets the max acceleration limit for the gripper joint; refer to 'arm_profile_acceleration' above | 0 |
 | use_moveit | set this to 'true' if MoveIt is being used; it loads the FollowJointTrajectory Action servers for the arm and gripper | false |
-| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
 | use_pid_cntlrs | set this to 'true' if you are commanding trajectories to the arm joints (via MoveIt or the trajectory topic) and would like to run PID controllers to make the motors better track the desired states. Refer to any file in the [pid_config](pid_config/) directory for a deeper explanation. Note that the 'arm_operating_mode' must be set to 'velocity' for this to work | false |
 | use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | false |
-
+| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |
+| external_urdf_loc | the file path to the custom urdf.xacro file that you would like to include in the Interbotix robot's urdf.xacro file| "" |
+| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 
 ##### Interbotix Turret
 
@@ -94,14 +92,13 @@ This is the bare minimum needed to get up and running. Take a look at the table 
 | robot_name | name of a robot (ex. 'turret1/wxxmd' or 'wxxmd') | "" |
 | robot_model | only used when launching multiple robots or if `robot_name` contains more than the model type; if that's the case, this should be set to the robot model type (ex. 'wxxmd'); `robot_name` should then be set to a unique name followed by '$(arg robot_model)' - such as 'turret1/wxxmd' | '$(arg robot_name)' |
 | port | the USB port to which the robot is connected | /dev/ttyDXL |
-| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
-| use_external_urdf | if you have a URDF of a custom attachment to go on the turret, set this to 'true' | false |
-| external_urdf_loc | set the file path to where your custom attachment URDF is located | "" |
 | turret_operating_mode | desired operating mode for the turret joints; this can be "position", "velocity", "pwm", "current", or "none"; note that the PhantomX turret does not support "current" control | position |
 | turret_profile_velocity | register value describing the time span that it should take for the joints to move; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-velocity112); if doing 'position' control, setting this to '1000' would mean it would take 1000 ms for the turret to get to the desired position. to have an 'infinite' max limit, set this to '0' | 0 |
 | turret_profile_acceleration | register value describing the time span it should take for the joints to accelerate; refer to the register description [here](http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108); if doing 'velocity' control, setting this to 100 would mean it would take 100 ms for the turret joints to get to their desired velocity; to get very fast motion, set this to '0'. | 0 |
-| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |  
 | use_time_based_profile | set this to 'true' to do 'time' based control or set to 'false' to do 'velocity' based control (refer to parameter description above) | true |
+| use_world_frame | set this to 'true' if you would like to load a 'world' frame to the 'robot_description' parameter which is located exactly at the 'base_link' frame of the robot; if using multiple robots or if you would like to attach the 'base_link' frame of the robot to a different frame, set this to False | true |
+| external_urdf_loc | the file path to the custom urdf.xacro file that you would like to include in the Interbotix robot's urdf.xacro file| "" |
+| use_default_rviz | launches the rviz and static_transform_publisher nodes | true |
 
 ## Troubleshooting Notes
 Please note that the node does NOT check joint limits. It is up to the user to make sure that the joint limits are not violated. That said, if a motor experiences a load too much for it, it should error out - resulting in the motor torquing off. It is easy to tell if a motor is in an error state out since its LED will be flashing red. In this case, unplug and replug the power cable into the robot which should reset the motor.

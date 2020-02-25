@@ -2,9 +2,10 @@
 
   <!-- This file makes it easy to include the settings for sensor managers -->
   <arg name="robot_name" default="" />
-  
+  <arg name="robot_model" default=""/>
+
   <!-- Params for 3D sensors config -->
-  <!-- <rosparam command="load" file="$(find interbotix_moveit)/config/sensors_3d/$(arg robot_name)_sensors_3d.yaml" /> -->
+  <!-- <rosparam command="load" file="$(find interbotix_moveit)/config/sensors_3d/$(arg robot_model)_sensors_3d.yaml" /> -->
 
   <!-- Params for the octomap monitor -->
   <!--  <param name="octomap_frame" type="string" value="some frame in which the robot moves" /> -->
@@ -14,6 +15,7 @@
   <!-- Load the robot specific sensor manager; this sets the moveit_sensor_manager ROS parameter -->
   <!-- <include file="$(find interbotix_moveit)/launch/interbotix_moveit_sensor_manager.launch.xml">
     <arg name="robot_name" value="$(arg robot_name)"/>
+    <arg name="robot_model" value="$(arg robot_model)"/>
   </include> -->
 
 </launch>

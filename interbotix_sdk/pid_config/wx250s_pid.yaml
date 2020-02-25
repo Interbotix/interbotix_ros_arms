@@ -7,8 +7,7 @@
 # interbotix_sdk assumes that when a 'position' or 'velocity' command is sent to a motor,
 # the internal PID controller in the motor firmware is able to track the command perfectly.
 # However, due to gravity, backlash, and potentially other factors, this is not always the case.
-# While the PID gains in the motor firmware can be tuned, it does not seem to make any noticeable
-# difference. To fix this issue, velocity-based-position-PID-controllers were placed in the
+# To fix this issue, velocity-based-position-PID-controllers were placed in the
 # interbotix_sdk between the desired trajectory and the motors. The way this works is as follows:
 #
 # 1) Whenever it's time for a new waypoint in a trajectory to get processed, the desired joint

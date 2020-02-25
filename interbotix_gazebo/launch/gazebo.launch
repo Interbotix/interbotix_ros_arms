@@ -1,31 +1,28 @@
 <launch>
 
-  <!-- these are the arguments you can pass this launch file, for example paused:=true -->
-  <arg name="paused"                        default="true"/>
-  <arg name="use_sim_time"                  default="true"/>
-  <arg name="gui"                           default="true"/>
-  <arg name="recording"                     default="false"/>
-  <arg name="debug"                         default="false"/>
   <arg name="robot_name"                    default=""/>
-  <arg name="use_world_frame"               default="true"/>
-  <arg name="use_default_rviz"              default="false"/>
+  <arg name="robot_model"                   default="$(arg robot_name)"/>
   <arg name="use_default_gripper_bar"       default="true"/>
   <arg name="use_default_gripper_fingers"   default="true"/>
-  <arg name="use_external_gripper_urdf"     default="false"/>
-  <arg name="external_gripper_urdf_loc"     default=""/>
-
+  <arg name="use_world_frame"               default="true"/>
+  <arg name="external_urdf_loc"             default=""/>
+  <arg name="use_default_rviz"              default="false"/>
+  <arg name="gui"                           default="true"/>
+  <arg name="debug"                         default="false"/>
+  <arg name="paused"                        default="true"/>
+  <arg name="recording"                     default="false"/>
+  <arg name="use_sim_time"                  default="true"/>
 
   <env name="GAZEBO_RESOURCE_PATH" value="$(find interbotix_gazebo)"/>
 
-  <rosparam file="$(find interbotix_gazebo)/config/$(arg robot_name)_gazebo_controllers.yaml" command="load" ns="$(arg robot_name)"/>
+  <rosparam file="$(find interbotix_gazebo)/config/$(arg robot_model)_gazebo_controllers.yaml" command="load" ns="$(arg robot_name)"/>
 
-  <!-- We resume the logic in empty_world.launch -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="debug" value="$(arg debug)" />
     <arg name="gui" value="$(arg gui)" />
+    <arg name="debug" value="$(arg debug)" />
     <arg name="paused" value="$(arg paused)"/>
-    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
     <arg name="recording" value="$(arg recording)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
   </include>
 
   <node
@@ -39,17 +36,15 @@
 
   <include file="$(find interbotix_descriptions)/launch/description.launch">
     <arg name="robot_name"                    value="$(arg robot_name)"/>
-    <arg name="use_joint_pub"                 value="false"/>
+    <arg name="robot_model"                   value="$(arg robot_model)"/>
     <arg name="use_default_gripper_bar"       value="$(arg use_default_gripper_bar)"/>
     <arg name="use_default_gripper_fingers"   value="$(arg use_default_gripper_fingers)"/>
-    <arg name="use_external_gripper_urdf"     value="$(arg use_external_gripper_urdf)"/>
-    <arg name="external_gripper_urdf_loc"     value="$(arg external_gripper_urdf_loc)"/>
-    <arg name="load_gazebo_material"          value="true"/>
     <arg name="use_world_frame"               value="$(arg use_world_frame)"/>
+    <arg name="external_urdf_loc"             value="$(arg external_urdf_loc)"/>
+    <arg name="load_gazebo_configs"           value="true"/>
     <arg name="use_default_rviz"              value="$(arg use_default_rviz)"/>
   </include>
 
-  <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
   <node
     name="urdf_spawner"
     pkg="gazebo_ros"
@@ -57,6 +52,6 @@
     respawn="false"
     output="screen"
     ns="$(arg robot_name)"
-	  args="-urdf -model $(arg robot_name) -param robot_description"/>
+	  args="-urdf -model $(arg robot_model) -param robot_description"/>
 
 </launch>

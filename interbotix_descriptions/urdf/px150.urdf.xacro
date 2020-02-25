@@ -2,14 +2,15 @@
 <robot name="px150" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <xacro:arg name="robot_name" default = ""/>
-  <xacro:arg name="default_gripper_bar" default="true"/>
-  <xacro:arg name="default_gripper_fingers" default="true"/>
-  <xacro:arg name="external_gripper_urdf" default="false"/>
-  <xacro:arg name="external_gripper_urdf_loc" default=""/>
-  <xacro:arg name="gazebo" default="false"/>
-  <xacro:arg name="world_frame" default="false"/>
+  <xacro:arg name="use_world_frame" default="false"/>
+  <xacro:arg name="use_default_gripper_bar" default="true"/>
+  <xacro:arg name="use_default_gripper_fingers" default="true"/>
+  <xacro:arg name="external_urdf_loc" default=""/>
+  <xacro:arg name="load_gazebo_configs" default="false"/>
 
-  <xacro:if value="$(arg gazebo)">
+  <xacro:property name="urdf_loc" value="$(arg external_urdf_loc)"/>
+
+  <xacro:if value="$(arg load_gazebo_configs)">
     <xacro:include filename="$(find interbotix_gazebo)/config/interbotix_texture.gazebo"/>
   </xacro:if>
 
@@ -17,7 +18,7 @@
     <texture filename="package://interbotix_descriptions/meshes/interbotix_black.png"/>
   </material>
 
-  <xacro:if value="$(arg world_frame)">
+  <xacro:if value="$(arg use_world_frame)">
     <link name="world"/>
     <joint name="fixed" type="fixed">
       <parent link="world"/>
@@ -296,7 +297,7 @@
 
   <!-- If the default gripper bar is being used, then also add the gripper bar -->
 
-  <xacro:if value="$(arg default_gripper_bar)">
+  <xacro:if value="$(arg use_default_gripper_bar)">
 
     <joint name="gripper_bar" type="fixed">
       <axis xyz="1 0 0"/>
@@ -342,7 +343,7 @@
 
     <!-- If the default gripper fingers are being used, add those as well -->
 
-    <xacro:if value="$(arg default_gripper_fingers)">
+    <xacro:if value="$(arg use_default_gripper_fingers)">
 
       <joint name="left_finger" type="prismatic">
         <axis xyz="0 1 0"/>
@@ -389,7 +390,7 @@
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <parent link="$(arg robot_name)/fingers_link"/>
         <child link="$(arg robot_name)/right_finger_link"/>
-        <xacro:unless value="$(arg gazebo)">
+        <xacro:unless value="$(arg load_gazebo_configs)">
           <mimic joint="left_finger" multiplier="-1" offset="0"/>
         </xacro:unless>
       </joint>
@@ -443,8 +444,8 @@
 
   </xacro:if>
 
-  <xacro:if value="$(arg external_gripper_urdf)">
-    <xacro:include filename="$(arg external_gripper_urdf_loc)"/>
+  <xacro:if value="${urdf_loc != ''}">
+    <xacro:include filename="${urdf_loc}"/>
   </xacro:if>
 
 </robot>

@@ -58,7 +58,6 @@ class InterbotixRobot(object):
         self.pub_single_command = rospy.Publisher(robot_name + "/single_joint/command", SingleCommand, queue_size=100)              # ROS Publisher to command a specified joint
         self.sub_joint_states = rospy.Subscriber(robot_name + "/joint_states", JointState, self.joint_state_cb)                     # ROS Subscriber to get the current joint states
         while (self.joint_states == None and not rospy.is_shutdown()): pass                                                         # Wait until the first JointState message is received
-        self.joint_positions = list(self.joint_states.position[:self.resp.num_joints])                                              # Holds the desired joint positions
         if robot_model is None:
             robot_model = robot_name
         if (mrd is not None):
@@ -66,12 +65,14 @@ class InterbotixRobot(object):
             self.gripper_moving = False                                                                                             # When in PWM mode, False means the gripper PWM is 0; True means the gripper PWM in nonzero
             self.gripper_command = Float64()                                                                                        # ROS Message to hold the gripper PWM command
             self.set_gripper_pressure(gripper_pressure)                                                                             # Maps gripper pressure to a PWM range
-            self.gripper_index = self.joint_indx_dict["gripper"] + 1                                                                # Index of the 'left_finger' joint in the JointState message
+            self.gripper_index = self.joint_states.name.index("left_finger")                                                        # Index of the 'left_finger' joint in the JointState message
             self.initial_guesses = [[0.0] * self.resp.num_joints for i in range(3)]                                                 # Guesses made up of joint values to seed the IK function
             self.initial_guesses[1][0] = np.deg2rad(-120)
             self.initial_guesses[2][0] = np.deg2rad(120)
             self.pub_gripper_command = rospy.Publisher(robot_name + "/gripper/command", Float64, queue_size=100)                    # ROS Publisher to command the gripper
             self.pub_joint_traj = rospy.Publisher(robot_name + "/arm_controller/joint_trajectory", JointTrajectory, queue_size=100) # ROS Pubilsher to command Cartesian trajectories
+            self.waist_index = self.joint_states.name.index("waist")                                                                # Index of the 'waist' joint in the JointState 'name' list
+            self.joint_positions = list(self.joint_states.position[self.waist_index:(self.resp.num_joints+self.waist_index)])       # Holds the desired joint positions
             self.T_sb = mr.FKinSpace(self.robot_des.M, self.robot_des.Slist, self.joint_positions)                                  # Transformation matrix describing the pose of the end-effector w.r.t. the Space frame
             tmr_controller = rospy.Timer(rospy.Duration(0.02), self.controller)                                                     # ROS Timer to check gripper position
         if self.use_time:
@@ -143,6 +144,21 @@ class InterbotixRobot(object):
                 self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Acceleration", value=int(accel_time * 1000))
             else:
                 self.srv_set_register(cmd=RegisterValuesRequest.ARM_JOINTS, addr_name="Profile_Acceleration", value=int(accel_time))
+
+    ### @brief Helper function to command the 'Profile_Velocity' and 'Profile_Acceleration' motor registers for the specified joint
+    ### @param moving_time - refer to Notes above
+    ### @param accel_time - refer to Notes above
+    def set_single_trajectory_time(self, joint_name, moving_time=None, accel_time=None):
+        if (moving_time != None):
+            if self.use_time:
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Velocity", value=int(moving_time * 1000))
+            else:
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Velocity", value=int(moving_time))
+        if (accel_time != None):
+            if self.use_time:
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Acceleration", value=int(accel_time * 1000))
+            else:
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Acceleration", value=int(accel_time))
 
 # ******************************** PUBLIC FUNCTIONS IF CONTROLLING AN INTERBOTIX ARM (NOT TURRET)  ********************************
 
@@ -303,7 +319,7 @@ class InterbotixRobot(object):
             self.set_trajectory_time(wp_moving_time, wp_accel_time)
             joint_traj.joint_names = self.resp.joint_names[:self.resp.num_joints]
             with self.js_mutex:
-                current_positions = list(self.joint_states.position[:self.resp.num_joints])
+                current_positions = list(self.joint_states.position[self.waist_index:(self.resp.num_joints+self.waist_index)])
             joint_traj.points[0].positions = current_positions
             joint_traj.header.stamp = rospy.Time.now()
             self.pub_joint_traj.publish(joint_traj)
@@ -384,23 +400,32 @@ class InterbotixRobot(object):
         if (delay > 0):
             rospy.sleep(delay)
 
+    ### @brief Set a specific joint to a different operating mode
+    ### @param joint_name - name of the joint to control
+    ### @param mode - either "position", "ext_position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
+    def set_single_joint_operating_mode(self, joint_name, mode):
+        self.srv_set_op(cmd=OperatingModesRequest.SINGLE_JOINT, mode=mode, joint_name=joint_name)
+
     ### @brief Command a single joint with a specific value
     ### @param joint_name - name of the joint to control
     ### @param command - desired command
     ### @param moving_time - refer to Notes above
     ### @param accel_time - refer to Notes above
     ### @param delay - number of seconds to delay while the robot moves
-    ### @details - Note that if moving_time or accel_time is specified, the changes affect ALL the joints, not just the specified one
+    ### @details - Note that if moving_time or accel_time is specified, the changes only affect the desired joint.
+    ###            So make sure to respecify these two parameters if controlling all arm joints later so that
+    ###            they spend the same amount of time moving and accelerating. Also note that this function is
+    ###            only to be used with arm joints when not in 'position' control mode or with joints not in the arm
     def set_single_joint_command(self, joint_name, command, moving_time=None, accel_time=None, delay=0):
-        self.set_trajectory_time(moving_time, accel_time)
+        self.set_single_trajectory_time(joint_name, moving_time, accel_time)
         single_command = SingleCommand(joint_name, command)
         self.pub_single_command.publish(single_command)
         if delay > 0:
             rospy.sleep(delay)
 
-    ### @brief Returns a list containing the positions of the arm joints (excluding the gripper)
+    ### @brief Returns a list containing the positions of all joints
     ### @param positions [out] - current joint positions [rad]
     def get_joint_positions(self):
         with self.js_mutex:
-            positions = self.joint_states.position[:self.num_joints]
+            positions = self.joint_states.position
         return positions

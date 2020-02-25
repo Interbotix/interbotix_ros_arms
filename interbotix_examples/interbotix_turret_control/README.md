@@ -54,10 +54,10 @@ A red error message might appear in the screen saying `Couldn't open joystick fo
 | Argument | Description | Default Value |
 | -------- | ----------- | :-----------: |
 | robot_name | five character name of a turret | "" |
+| use_default_rviz | 'true' if Rviz should be displayed; 'false' otherwise | true |
 | threshold | value from 0 to 1 defining joystick sensitivity; a larger number means the joystick should be less sensitive | 0.75 |
 | controller | type of Playstation controller ('ps3' or 'ps4') | ps4 |
 | start_non_gui_nodes | 'true' if the 'non GUI nodes' should be launched; 'false' otherwise | true |
-| use_default_rviz | 'true' if Rviz should be displayed; 'false' otherwise | true |
 
 After launching, a GUI should pop up similar to the one below. To become more familiar with the GUI and external joystick controls, please refer to the tutorial located [here](Turret_Control_Tutorial.pdf).
 

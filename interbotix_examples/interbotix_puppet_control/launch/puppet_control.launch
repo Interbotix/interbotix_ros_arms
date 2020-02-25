@@ -13,22 +13,22 @@
     <arg name="robot_name"                    value="$(arg robot_name_1)"/>
     <arg name="robot_model"                   value="$(arg robot_model_1)"/>
     <arg name="port"                          value="$(arg port_1)"/>
-    <arg name="use_default_rviz"              value="false"/>
     <arg name="use_world_frame"               value="false"/>
+    <arg name="use_default_rviz"              value="false"/>
   </include>
 
   <include file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                    value="$(arg robot_name_2)"/>
     <arg name="robot_model"                   value="$(arg robot_model_2)"/>
     <arg name="port"                          value="$(arg port_2)"/>
-    <arg name="use_default_rviz"              value="false"/>
-    <arg name="use_world_frame"               value="false"/>
     <arg name="arm_operating_mode"            value="position"/>
     <arg name="arm_profile_velocity"          value="0"/>
     <arg name="arm_profile_acceleration"      value="0"/>
     <arg name="gripper_operating_mode"        value="position"/>
     <arg name="gripper_profile_velocity"      value="0"/>
     <arg name="gripper_profile_acceleration"  value="0"/>
+    <arg name="use_world_frame"               value="false"/>
+    <arg name="use_default_rviz"              value="false"/>
   </include>
 
   <node

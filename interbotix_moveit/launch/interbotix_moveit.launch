@@ -1,39 +1,47 @@
 <launch>
 
   <arg name="robot_name"                         default=""/>
-  <arg name="use_gazebo"                         default="false"/>
-  <arg name="use_actual"                         default="false"/>
-  <arg name="use_fake"                           default="false"/>
+  <arg name="robot_model"                        default="$(arg robot_name)"/>
   <arg name="arm_operating_mode"                 default="position"/>
   <arg name="arm_profile_velocity"               default="131"/>
   <arg name="arm_profile_acceleration"           default="15"/>
-  <arg name="use_world_frame"                    default="true"/>
   <arg name="use_pid_cntlrs"                     default="false"/>
+  <arg name="use_world_frame"                    default="true"/>
+  <arg name="external_urdf_loc"                  default=""/>
+  <arg name="external_srdf_loc"                  default=""/>
+  <arg name="use_gazebo"                         default="false"/>
+  <arg name="use_actual"                         default="false"/>
+  <arg name="use_fake"                           default="false"/>
   <arg name="dof"                                default="5"/>
 
   <include if="$(arg use_gazebo)" file="$(find interbotix_gazebo)/launch/gazebo.launch">
     <arg name="robot_name"                       value="$(arg robot_name)"/>
+    <arg name="robot_model"                      value="$(arg robot_model)"/>
     <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
+    <arg name="external_urdf_loc"                value="$(arg external_urdf_loc)"/>
   </include>
 
   <include if="$(arg use_actual)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                       value="$(arg robot_name)"/>
-    <arg name="use_default_rviz"                 value="false"/>
-    <arg name="use_moveit"                       value="true"/>
-    <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
+    <arg name="robot_model"                      value="$(arg robot_model)"/>
     <arg name="arm_operating_mode"               value="$(arg arm_operating_mode)"/>
     <arg name="arm_profile_velocity"             value="$(arg arm_profile_velocity)"/>
     <arg name="arm_profile_acceleration"         value="$(arg arm_profile_acceleration)"/>
+    <arg name="use_moveit"                       value="true"/>
     <arg name="use_pid_cntlrs"                   value="$(arg use_pid_cntlrs)"/>
+    <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
+    <arg name="external_urdf_loc"                value="$(arg external_urdf_loc)"/>
+    <arg name="use_default_rviz"                 value="false"/>
   </include>
 
   <group if="$(arg use_fake)">
 
     <include file="$(find interbotix_descriptions)/launch/description.launch">
       <arg name="robot_name"                       value="$(arg robot_name)"/>
-      <arg name="use_default_rviz"                 value="false"/>
+      <arg name="robot_model"                      value="$(arg robot_model)"/>
       <arg name="use_world_frame"                  value="$(arg use_world_frame)"/>
-      <arg name="use_joint_pub"                    value="false"/>
+      <arg name="external_urdf_loc"                value="$(arg external_urdf_loc)"/>
+      <arg name="use_default_rviz"                 value="false"/>
     </include>
 
     <node
@@ -49,6 +57,8 @@
   <include file="$(find interbotix_moveit)/launch/move_group.launch" ns="$(arg robot_name)">
     <arg name="publish_monitored_planning_scene" value="true" />
     <arg name="robot_name"                       value="$(arg robot_name)"/>
+    <arg name="robot_model"                      value="$(arg robot_model)"/>
+    <arg name="external_srdf_loc"                value="$(arg external_srdf_loc)"/>
     <arg name="dof"                              value="$(arg dof)"/>
     <arg name="fake_execution"                   value="$(arg use_fake)"/>
   </include>
