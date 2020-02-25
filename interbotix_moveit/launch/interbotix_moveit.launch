@@ -9,6 +9,7 @@
   <arg name="use_world_frame"                    default="true"/>
   <arg name="external_urdf_loc"                  default=""/>
   <arg name="external_srdf_loc"                  default=""/>
+  <arg name="rviz_frame"                         default="world"/>
   <arg name="use_gazebo"                         default="false"/>
   <arg name="use_actual"                         default="false"/>
   <arg name="use_fake"                           default="false"/>
@@ -55,15 +56,16 @@
   </group>
 
   <include file="$(find interbotix_moveit)/launch/move_group.launch" ns="$(arg robot_name)">
-    <arg name="publish_monitored_planning_scene" value="true" />
     <arg name="robot_name"                       value="$(arg robot_name)"/>
     <arg name="robot_model"                      value="$(arg robot_model)"/>
     <arg name="external_srdf_loc"                value="$(arg external_srdf_loc)"/>
     <arg name="dof"                              value="$(arg dof)"/>
     <arg name="fake_execution"                   value="$(arg use_fake)"/>
+    <arg name="publish_monitored_planning_scene" value="true" />
   </include>
 
   <include file="$(find interbotix_moveit)/launch/moveit_rviz.launch" ns="$(arg robot_name)">
+    <arg name="rviz_frame"                       value="$(arg rviz_frame)"/>
     <arg name="config"                           value="true"/>
   </include>
 
