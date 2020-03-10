@@ -44,10 +44,30 @@ static const std::map<std::string, int> ps4 = {{"GRIPPER_PWM_DEC", 0}, // button
                                                {"SPEED_TYPE", 6},
                                                {"SPEED", 7}};
 
+// Xbox 360 Controller button mappings
+static const std::map<std::string, int> xbox360 = {{"GRIPPER_PWM_DEC", 0}, // buttons start here
+                                                   {"GRIPPER_OPEN", 1},
+                                                   {"GRIPPER_PWM_INC", 3},
+                                                   {"GRIPPER_CLOSE", 2},
+                                                   {"WAIST_CCW", 4},
+                                                   {"WAIST_CW", 5},
+                                                   {"SLEEP_POSE", 7},
+                                                   {"HOME_POSE", 6},
+                                                   {"FLIP_EE_X", 9},
+                                                   {"FLIP_EE_ROLL", 10},
+                                                   {"EE_X", 0},            // axes start here
+                                                   {"EE_Y_INC", 2},
+                                                   {"EE_Y_DEC", 5},
+                                                   {"EE_Z", 1},
+                                                   {"EE_ROLL", 3},
+                                                   {"EE_PITCH", 4},
+                                                   {"SPEED_TYPE", 6},
+                                                   {"SPEED", 7}};
+
 ros::Publisher pub_joy_cmd;                                 // ROS Publisher to publish ArmJoyControl messages
 ros::Subscriber sub_joy_raw;                                // ROS Subscriber to get Joy messages from the 'joy_node'
 interbotix_joy_control::ArmJoyControl prev_joy_cmd;         // Keep track of the previously commanded ArmJoyControl message so that only unique messages are published
-std::map<std::string, int> cntlr;                           // Holds either the PS3 or PS4 button mappings
+std::map<std::string, int> cntlr;                           // Holds the button mappings
 std::string controller_type;                                // Holds the name of the controller received from the ROS Parameter server
 double threshold;                                           // Joystick sensitivity threshold
 
@@ -80,10 +100,20 @@ void joy_state_cb(const sensor_msgs::Joy &msg)
     joy_cmd.ee_x_cmd = interbotix_joy_control::ArmJoyControl::EE_X_INC;
 
   // Check the ee_y_cmd
-  if (msg.buttons.at(cntlr["EE_Y_INC"]) == 1)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_INC;
-  else if (msg.buttons.at(cntlr["EE_Y_DEC"]) == 1)
-    joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_DEC;
+  if (controller_type == "ps3" || controller_type == "ps4")
+  {
+    if (msg.buttons.at(cntlr["EE_Y_INC"]) == 1)
+      joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_INC;
+    else if (msg.buttons.at(cntlr["EE_Y_DEC"]) == 1)
+      joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_DEC;
+  }
+  else if (controller_type == "xbox360")
+  {
+    if (msg.axes.at(cntlr["EE_Y_INC"]) <= 1.0 - 2.0 * threshold)
+      joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_INC;
+    else if (msg.axes.at(cntlr["EE_Y_DEC"]) <= 1.0 - 2.0 * threshold)
+      joy_cmd.ee_y_cmd = interbotix_joy_control::ArmJoyControl::EE_Y_DEC;
+  }
 
   // Check the ee_z_cmd
   if (msg.axes.at(cntlr["EE_Z"]) >= threshold)
@@ -147,7 +177,8 @@ void joy_state_cb(const sensor_msgs::Joy &msg)
     else if (msg.buttons.at(cntlr["SPEED_FINE"]) == 1)
       joy_cmd.toggle_speed_cmd = interbotix_joy_control::ArmJoyControl::SPEED_FINE;
   }
-  else if (controller_type == "ps4")
+
+  else if (controller_type == "ps4" || controller_type == "xbox360")
   {
     // Check the speed_cmd
     if (msg.axes.at(cntlr["SPEED"]) == 1)
@@ -190,7 +221,9 @@ int main(int argc, char **argv)
   ros::NodeHandle n;
   ros::param::get("~threshold", threshold);
   ros::param::get("~controller", controller_type);
-  if (controller_type == "ps3")
+  if (controller_type == "xbox360")
+    cntlr = xbox360;
+  else if (controller_type == "ps3")
     cntlr = ps3;
   else
     cntlr = ps4;
