@@ -3,7 +3,7 @@
   <name>interbotix_moveit</name>
   <version>0.3.0</version>
   <description>
-     An automatically generated package with all the configuration and launch files for using the wx200 with the MoveIt! Motion Planning Framework
+     An automatically generated package with all the configuration and launch files for using an Interbotix Arm with the MoveIt! Motion Planning Framework
   </description>
   <author email="trsupport@trossenrobotics.com">Solomon Wiznitzer</author>
   <maintainer email="trsupport@trossenrobotics.com">Solomon Wiznitzer</maintainer>

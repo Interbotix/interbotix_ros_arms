@@ -2,8 +2,9 @@
 
   <arg name="robot_name"                      default=""/>
   <arg name="bag_name"                        default="$(arg robot_name)_commands"/>
+  <arg name="arm_run"                         default="true"/>
 
-  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+  <include if="$(arg arm_run)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                    value="$(arg robot_name)"/>
   </include>
 

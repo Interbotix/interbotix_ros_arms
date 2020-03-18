@@ -26,9 +26,9 @@ from interbotix_sdk.srv import RegisterValuesRequest
 #       - if using 'Time-Based-Control' (recommended), the parameters used as arguments in the functions below are defined as follows:
 #             * moving_time - time in seconds that it should take for the robot motion to complete ('position' control only)
 #             * accel_time - time in seconds that it should take for the motors to accelerate/decelerate - should never be more than half the moving_time ('position' control only)
-#       - if using 'Velocity-Based-control', the parameters used as argumetns in the functions below are defined as follows:
+#       - if using 'Velocity-Based-Control', the parameters used as arguments in the functions below are defined as follows:
 #             * moving_time - register value representing the max allowable velocity for joint motion ('position' control only)
-#             * accel_time - register value representing the max allowable acceleration for joint motion ('posiiton' or 'velocity' control only)
+#             * accel_time - register value representing the max allowable acceleration for joint motion ('position' or 'velocity' control only)
 #       - More details at http://emanual.robotis.com/docs/en/dxl/x/xm430-w350/#profile-acceleration108 (look at the 'Profile Acceleration' and 'Profile Velocity' sections)
 
 class InterbotixRobot(object):
@@ -40,7 +40,8 @@ class InterbotixRobot(object):
     ### @param moving_time - refer to Notes above
     ### @param accel_time - refer to Notes above
     ### @param gripper_pressure - value from 0 to 1 representing the pressure the gripper should exert when grasping an object
-    def __init__(self, robot_name, mrd=None, robot_model=None, moving_time=2.0, accel_time=0.3, gripper_pressure=0.5):
+    ### @param use_time - set to True if 'use_time_based_profile' was set to True when running the launch file; otherwise, set to False
+    def __init__(self, robot_name, mrd=None, robot_model=None, moving_time=2.0, accel_time=0.3, gripper_pressure=0.5, use_time=True):
         rospy.init_node(robot_name + "_robot_manipulation")                                                                         # Initialize ROS Node
         rospy.wait_for_service(robot_name + "/get_robot_info")                                                                      # Wait for ROS Services to become available
         rospy.wait_for_service(robot_name + "/set_operating_modes")
@@ -49,7 +50,7 @@ class InterbotixRobot(object):
         self.srv_set_op = rospy.ServiceProxy(robot_name + "/set_operating_modes", OperatingModes)
         self.srv_set_register = rospy.ServiceProxy(robot_name + "/set_motor_register_values", RegisterValues)
         self.resp = srv_robot_info()                                                                                                # Get Robot Info like joint limits
-        self.use_time = rospy.get_param(robot_name + "/arm_node/use_time_based_profile")                                            # Determine if 'Drive Mode' is set to 'Time' or 'Velocity'                                                   #
+        self.use_time = use_time                                                                                                    # Determine if 'Drive Mode' is set to 'Time' or 'Velocity'
         self.set_trajectory_time(moving_time, accel_time)                                                                           # Change the Profile Velocity/Acceleration Registers in the Arm motors
         self.joint_indx_dict = dict(zip(self.resp.joint_names, range(self.resp.num_single_joints)))                                 # Map joint names to their respective indices in the joint limit lists
         self.joint_states = None                                                                                                    # Holds the current joint states of the arm
@@ -403,8 +404,14 @@ class InterbotixRobot(object):
     ### @brief Set a specific joint to a different operating mode
     ### @param joint_name - name of the joint to control
     ### @param mode - either "position", "ext_position", "velocity", "pwm", or "current" ("current" only for the ViperX robots)
-    def set_single_joint_operating_mode(self, joint_name, mode):
+    ### @param leave_torqued_off - leaves a joint torqued off after setting its operating mode
+    ### @details - by default, the interbotix_sdk torques off a servo before setting its operating mode; then it torques the servo back on.
+    ###            This is necessary since some register values (such as the one for operating modes) cannot be changed unless the servo is
+    ###            torqued off.
+    def set_single_joint_operating_mode(self, joint_name, mode, leave_torqued_off=False):
         self.srv_set_op(cmd=OperatingModesRequest.SINGLE_JOINT, mode=mode, joint_name=joint_name)
+        if leave_torqued_off:
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Torque_Enable", value=0)
 
     ### @brief Command a single joint with a specific value
     ### @param joint_name - name of the joint to control
@@ -429,3 +436,15 @@ class InterbotixRobot(object):
         with self.js_mutex:
             positions = self.joint_states.position
         return positions
+
+    ### @brief Torque on specific joints
+    ### @param joint_names - list of joints to torque on
+    def torque_joints_on(self, joint_names):
+        for name in joint_names:
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[name]], addr_name="Torque_Enable", value=1)
+
+    ### @brief Torque off specific joints
+    ### @param joint_names - list of joints to torque off
+    def torque_joints_off(self, joint_names):
+        for name in joint_names:
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[name]], addr_name="Torque_Enable", value=0)

@@ -5,9 +5,10 @@
   <arg name="joint_id"                      default="0"/>
   <arg name="test_duration"                 default="600"/>
   <arg name="bag_name"                      default="new_bag"/>
+  <arg name="arm_run"                       default="true"/>
 
 
-  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+  <include if="$(arg arm_run)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                    value="$(arg robot_name)"/>
   </include>
 

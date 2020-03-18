@@ -203,8 +203,11 @@ void RobotArm::arm_set_joint_pwms(int32_t joint_pwms[])
 void RobotArm::arm_set_single_joint_to_position_control(const std::string joint_name, const int32_t joint_profile_vel, const int32_t joint_profile_accel)
 {
   const char* log = NULL;
-  bool result = dxl_wb.jointMode(joint_map[joint_name].motor_id, joint_profile_vel, joint_profile_accel, &log);
-  arm_check_error(result, &log);
+  for (auto const& id : shadow_map[joint_map[joint_name].motor_id])
+  {
+    bool result = dxl_wb.jointMode(id, joint_profile_vel, joint_profile_accel, &log);
+    arm_check_error(result, &log);
+  }
   joint_map[joint_name].mode = State::POSITION;
   ROS_INFO("%s set to position control with a profile velocity of %d and a profile acceleration of %d.", joint_name.c_str(), joint_profile_vel, joint_profile_accel);
 }
@@ -217,12 +220,15 @@ void RobotArm::arm_set_single_joint_to_position_control(const std::string joint_
 void RobotArm::arm_set_single_joint_to_ext_position_control(const std::string joint_name, const int32_t joint_profile_vel, const int32_t joint_profile_accel)
 {
   const char* log = NULL;
-  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
-  bool result = dxl_wb.setExtendedPositionControlMode(joint_map[joint_name].motor_id, &log);
-  arm_check_error(result, &log);
-  dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Profile_Velocity", joint_profile_vel, &log);
-  dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Profile_Acceleration", joint_profile_accel, &log);
-  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  for (auto const& id : shadow_map[joint_map[joint_name].motor_id])
+  {
+    dxl_wb.torqueOff(id);
+    bool result = dxl_wb.setExtendedPositionControlMode(id, &log);
+    arm_check_error(result, &log);
+    dxl_wb.itemWrite(id, "Profile_Velocity", joint_profile_vel, &log);
+    dxl_wb.itemWrite(id, "Profile_Acceleration", joint_profile_accel, &log);
+    dxl_wb.torqueOn(id);
+  }
   joint_map[joint_name].mode = State::EXT_POSITION;
   ROS_INFO("%s set to extended position control with a profile velocity of %d and a profile acceleration of %d.", joint_name.c_str(), joint_profile_vel, joint_profile_accel);
 }
@@ -233,8 +239,11 @@ void RobotArm::arm_set_single_joint_to_ext_position_control(const std::string jo
 void RobotArm::arm_set_single_joint_to_velocity_control(const std::string joint_name, const int32_t wheel_profile_accel)
 {
   const char* log = NULL;
-  bool result = dxl_wb.wheelMode(joint_map[joint_name].motor_id, wheel_profile_accel, &log);
-  arm_check_error(result, &log);
+  for (auto const& id : shadow_map[joint_map[joint_name].motor_id])
+  {
+    bool result = dxl_wb.wheelMode(id, wheel_profile_accel, &log);
+    arm_check_error(result, &log);
+  }
   joint_map[joint_name].mode = State::VELOCITY;
   ROS_INFO("%s set to velocity control with a profile acceleration of %d.", joint_name.c_str(), wheel_profile_accel);
 }
@@ -244,10 +253,13 @@ void RobotArm::arm_set_single_joint_to_velocity_control(const std::string joint_
 void RobotArm::arm_set_single_joint_to_current_control(const std::string joint_name)
 {
   const char* log = NULL;
-  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
-  bool result = dxl_wb.setCurrentControlMode(joint_map[joint_name].motor_id, &log);
-  arm_check_error(result, &log);
-  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  for (auto const& id : shadow_map[joint_map[joint_name].motor_id])
+  {
+    dxl_wb.torqueOff(joint_map[joint_name].motor_id);
+    bool result = dxl_wb.setCurrentControlMode(id, &log);
+    arm_check_error(result, &log);
+    dxl_wb.torqueOn(id);
+  }
   joint_map[joint_name].mode = State::CURRENT;
   ROS_INFO("%s set to current control.", joint_name.c_str());
 }
@@ -258,16 +270,19 @@ void RobotArm::arm_set_single_joint_to_pwm_control(const std::string joint_name)
 {
   const char* log = NULL;
   bool result = false;
-  dxl_wb.torqueOff(joint_map[joint_name].motor_id);
-  const char* model_name = dxl_wb.getModelName(joint_map[joint_name].motor_id, &log);
-  // For some reason, set 'setPWMControlMode' function does not work properly on XL430 servos.
-  // To get around this, just write to the register directly using the 'itemWrite' function.
-  if (strncmp(model_name, "XL430", strlen("XL430")) == 0)
-    result = dxl_wb.itemWrite(joint_map[joint_name].motor_id, "Operating_Mode", PWM_CONTROL_MODE, &log);
-  else
-    result = dxl_wb.setPWMControlMode(joint_map[joint_name].motor_id, &log);
-  arm_check_error(result, &log);
-  dxl_wb.torqueOn(joint_map[joint_name].motor_id);
+  for (auto const& id : shadow_map[joint_map[joint_name].motor_id])
+  {
+    dxl_wb.torqueOff(joint_map[joint_name].motor_id);
+    const char* model_name = dxl_wb.getModelName(id, &log);
+    // For some reason, set 'setPWMControlMode' function does not work properly on XL430 servos.
+    // To get around this, just write to the register directly using the 'itemWrite' function.
+    if (strncmp(model_name, "XL430", strlen("XL430")) == 0)
+      result = dxl_wb.itemWrite(id, "Operating_Mode", PWM_CONTROL_MODE, &log);
+    else
+      result = dxl_wb.setPWMControlMode(id, &log);
+    arm_check_error(result, &log);
+    dxl_wb.torqueOn(id);
+  }
   joint_map[joint_name].mode = State::PWM;
   ROS_INFO("%s set to pwm control.", joint_name.c_str());
 }
@@ -411,12 +426,16 @@ void RobotArm::arm_get_motor_configs(void)
       int32_t id = item["ID"].as<int32_t>();
       int32_t secondary_id = item["Secondary_ID"].as<int32_t>();
       Motor motor = {name, (uint8_t) id};
-      arm_motors.push_back(motor);
+      std::vector<uint8_t> shadow_list {(uint8_t) id};
       all_motors.push_back(motor);
+      motor_map.insert(std::pair<std::string, uint8_t>(name, id));
+      shadow_map.insert(std::pair<uint8_t, std::vector<uint8_t>>(id, shadow_list));
       // Determine if a motor is a shadow of another by checking its secondary 'shadow' ID.
       // Only increment 'joint_num_write' if the motor's secondary_id register is disabled (set to 255)
       if (node == dxl_config["order"] && name != "gripper" && secondary_id == 255)
         joint_num_write++;
+      if (node == dxl_config["order"] && name != "gripper")
+        arm_motors.push_back(motor);
       if (node == dxl_config["order"] && name == "gripper")
         use_gripper = true;
     }
@@ -447,7 +466,7 @@ void RobotArm::arm_get_motor_configs(void)
 
         if (item_name == "ID")
           continue;
-        if (item_name == "Secondary_ID" && value == 255)
+        else if (item_name == "Secondary_ID" && value == 255)
         {
           Motor joint = {name, (uint8_t) id};
           JointMode jm = {(uint8_t) id, State::NONE};
@@ -463,7 +482,9 @@ void RobotArm::arm_get_motor_configs(void)
             }
           }
         }
-        if (item_name == "Drive_Mode" && use_time_based_profile == true)
+        else if (item_name == "Secondary_ID" && value != 255)
+          shadow_map[value].push_back(id);
+        else if (item_name == "Drive_Mode" && use_time_based_profile == true)
           value += 4;
         Info info = {(uint8_t) id, item_name, value};
         dynamixel_info.push_back(info);
@@ -1227,9 +1248,9 @@ bool RobotArm::arm_set_firmware_register_values(interbotix_sdk::RegisterValues::
 
   if (req.cmd == interbotix_sdk::RegisterValues::Request::SINGLE_MOTOR || req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
   {
-    uint8_t id = req.id;
+    uint8_t id = motor_map[req.motor_name];
     if (req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
-      id = joint_map["gripper"].motor_id;
+      id = motor_map["gripper"];
     result = dxl_wb.itemWrite(id, req.addr_name.c_str(), req.value, &log);
     if (result == false)
     {
@@ -1268,9 +1289,9 @@ bool RobotArm::arm_get_firmware_register_values(interbotix_sdk::RegisterValues::
 
   if (req.cmd == interbotix_sdk::RegisterValues::Request::SINGLE_MOTOR || req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
   {
-    uint8_t id = req.id;
+    uint8_t id = motor_map[req.motor_name];
     if (req.cmd == interbotix_sdk::RegisterValues::Request::GRIPPER)
-      id = joint_map["gripper"].motor_id;
+      id = motor_map["gripper"];
     result = dxl_wb.itemRead(id, req.addr_name.c_str(), &value, &log);
     if (result == false)
     {
@@ -1705,7 +1726,7 @@ bool RobotArm::arm_set_joint_operating_mode(const std::string arm_mode, const in
 
   if (arm_mode_set)
   {
-    for (auto &joint : arm_joints)
+    for (auto const& joint : arm_joints)
       if (joint.name != "gripper")
         joint_map[joint.name].mode = arm_operating_mode;
   }

@@ -35,6 +35,7 @@ The command is pretty self explanatory - just note that '0' is the ID of the joi
 | joint_id | Dynamixel ID representing the joint for which to plot data | 0 |
 | test_duration | duration of test in seconds | 600 |
 | bag_name | name of the *rosbag* for which to save data | new_bag |
+| arm_run | 'true' if the *arm_run.launch* file should be launched - set to 'false' if you would like to run your own version of this file separately | true |
 
 ## Notes
 To determine which Dynamixel ID goes with which joint, just do a service call to the `/<robot_name>/get_robot_info` service. Look at the outputted 'joint_names' and 'joint_ids' vectors. The index of an ID in the 'joint_ids' vector corresponds to the joint name at the same index in the 'joint_names' vector.

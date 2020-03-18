@@ -40,6 +40,7 @@ The robot should now repeat the motions. To play the motion again, just re-enter
 | -------- | ----------- | :-----------: |
 | robot_name | name of a robot (ex. 'wx200') | "" |
 | bag_name | Desired ROS bag file name | $(arg robot_name)_commands |
+| arm_run | 'true' if the *arm_run.launch* file should be launched - set to 'false' if you would like to run your own version of this file separately | true |
 
 ### Puppet Control
 To run this feature, plug two of the same type of robots (ex. the WidowX 250) into two USB ports and in a terminal, type:
@@ -55,6 +56,7 @@ It might be good idea to verify which robot is given `ttyUSB0` as its port name 
 | robot_model_2 | model type of the second robot arm | "" |
 | port_2 | USB port to which the second robot is connected | /dev/ttyUSB1 |
 | rvizconfig | Rviz configuration file to visualize two robots | reference [puppet_control.launch](launch/puppet_control.launch) |
+| arm_run | 'true' if the *arm_run.launch* file should be launched - set to 'false' if you would like to run your own version of this file separately | true |
 
 ## Notes
 There are two bag files in the [bag](bag/) directory. Both of these were created using the 'record/playback' feature with the WidowX 200 arm. See if you can figure out what they do! As a hint, one of them involves [rubber ducks](https://www.amazon.com/Kangaroos-Rubber-Duck-Assortment-100-Pack/dp/B07JWF7X4F/ref=sr_1_4?keywords=small+rubber+ducks&qid=1571336224&sr=8-4).

@@ -11,7 +11,7 @@ from interbotix_sdk.robot_manipulation import InterbotixRobot
 
 def main():
     joint_positions = [0, 0]
-    turret = InterbotixRobot(robot_name="pxxls", moving_time=131, accel_time=15)
+    turret = InterbotixRobot(robot_name="pxxls", moving_time=131, accel_time=15, use_time=False)
     turret.set_joint_commands(joint_positions, delay=2.0)
     turret.set_single_joint_command("pan", 1.57, delay=1.0)
     turret.set_joint_commands([3.14, 1.5], moving_time=20, accel_time=5, delay=5)

@@ -20,3 +20,4 @@ To further customize the launch of the robot, take a look at the table below.
 | robot_name | name of a robot (ex. 'wx200') | "" |
 | control_mode | the outputted command from the control loop - can be either 'pwm' or 'current' | pwm |
 | gains_filepath | location of your 'gains.yaml' file | reference [pid_control.launch](launch/pid_control.launch) |
+| arm_run | 'true' if the *arm_run.launch* file should be launched - set to 'false' if you would like to run your own version of this file separately | true |

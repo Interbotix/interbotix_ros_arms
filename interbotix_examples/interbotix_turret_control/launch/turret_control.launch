@@ -5,10 +5,11 @@
   <arg name="threshold"                       default="0.75"/>
   <arg name="controller"                      default="ps4"/>
   <arg name="start_non_gui_nodes"             default="true"/>
+  <arg name="turret_run"                      default="true"/>
 
   <group if="$(arg start_non_gui_nodes)">
 
-    <include file="$(find interbotix_sdk)/launch/turret_run.launch">
+    <include if="$(arg turret_run)" file="$(find interbotix_sdk)/launch/turret_run.launch">
       <arg name="robot_name"                    value="$(arg robot_name)"/>
       <arg name="use_time_based_profile"        value="true"/>
       <arg name="use_default_rviz"              value="$(arg use_default_rviz)"/>

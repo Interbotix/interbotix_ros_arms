@@ -5,11 +5,12 @@
   <arg name="robot_model_2"                   default=""/>
   <arg name="port_2"                          default="/dev/ttyUSB1"/>
   <arg name="rvizconfig"                      default="$(find interbotix_puppet_control)/rviz/puppet_config.rviz" />
+  <arg name="arm_run"                         default="true"/>
 
   <arg name="robot_name_1" value="arm_1/$(arg robot_model_1)"/>
   <arg name="robot_name_2" value="arm_2/$(arg robot_model_2)"/>
 
-  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+  <include if="$(arg arm_run)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                    value="$(arg robot_name_1)"/>
     <arg name="robot_model"                   value="$(arg robot_model_1)"/>
     <arg name="port"                          value="$(arg port_1)"/>
@@ -17,7 +18,7 @@
     <arg name="use_default_rviz"              value="false"/>
   </include>
 
-  <include file="$(find interbotix_sdk)/launch/arm_run.launch">
+  <include if="$(arg arm_run)" file="$(find interbotix_sdk)/launch/arm_run.launch">
     <arg name="robot_name"                    value="$(arg robot_name_2)"/>
     <arg name="robot_model"                   value="$(arg robot_model_2)"/>
     <arg name="port"                          value="$(arg port_2)"/>

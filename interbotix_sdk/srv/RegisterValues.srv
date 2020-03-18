@@ -8,18 +8,20 @@
 #   1) ARM_JOINTS_AND_GRIPPER - affects the register values for all arm joints, including the gripper.
 #   2) ARM_JOINTS - affects the register values for all arm joints, excluding the gripper.
 #   3) GRIPPER - affects the register value only for the gripper
-#   4) SINGLE_MOTOR - affects the register value for the motor specified by the 'id' parameter.
-#                     Note that the 'id' parameter only needs to be used for this option. For any
-#                     other option, it can be left blank.
-# Set the option to the 'cmd' parameter and the 'id' to the specified motor (if doing the
-# SINGLE_MOTOR option). 'id' is equivalent to the Dynamixel ID of the motor. To look up the motor IDs,
-# check out the robot-specific motor config files in the interbotix_sdk/config directory.
+#   4) SINGLE_MOTOR - affects the register for the motor specified by 'motor_name'.
+#                     Note that the 'motor_name' parameter only needs to be used for this
+#                     option. For any other option, it can be left blank.
+#
+# Set the option to the 'cmd' parameter and the 'motor_name' to the specified motor (if doing the
+# SINGLE_MOTOR option)..
 #
 # Next, set the 'addr_name' parameter to the name of the register to be written to or read from.
 #
 # If setting the register(s) value, set the 'value' parameter to the desired value. This value will be
 # written to either one or many motors depending on the 'cmd' option selected. Note that if a joint is
-# controlled by two motors, both motors will be updated with the desired value.
+# controlled by two motors and the register is in the RAM area, both motors' registers will be updated
+# with the desired value. If the register is in the EEPROM area, it must be modified with another service call.
+# As an FYI, if modifying an EEPROM register, the servo must first be torqued off.
 #
 # If reading the register(s) values, do not set the 'value' parameter. Instead, call the service at this
 # stage. The 'values' vector will be automatically updated with the register(s) value(s). If reading from
@@ -32,7 +34,7 @@ int8 GRIPPER = 3
 int8 SINGLE_MOTOR = 4
 
 int8 cmd
-uint8 id
+string motor_name
 string addr_name
 int32 value
 ---
