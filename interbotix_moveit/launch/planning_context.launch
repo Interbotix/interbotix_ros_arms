@@ -14,7 +14,7 @@
 
   <!-- The semantic description that corresponds to the URDF -->
   <param name="$(arg robot_description)_semantic"
-    command="$(find xacro)/xacro --inorder $(find interbotix_moveit)/config/srdf/$(arg robot_model).srdf.xacro
+    command="$(find xacro)/xacro $(find interbotix_moveit)/config/srdf/$(arg robot_model).srdf.xacro
         robot_name:=$(arg robot_name)
         external_srdf_loc:=$(arg external_srdf_loc)"/>
 
