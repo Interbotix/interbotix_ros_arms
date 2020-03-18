@@ -19,7 +19,7 @@
                                                      external_urdf_loc:=$(arg external_urdf_loc)
                                                      load_gazebo_configs:=$(arg load_gazebo_configs)"/>
 
-  <param name="$(arg robot_name)/robot_description"  command="$(find xacro)/xacro --inorder $(arg model)" />
+  <param name="$(arg robot_name)/robot_description"  command="$(find xacro)/xacro $(arg model)" />
 
   <node if="$(arg jnt_pub_gui)"
     name="joint_state_publisher_gui"
