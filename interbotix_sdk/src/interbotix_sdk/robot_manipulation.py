@@ -152,14 +152,14 @@ class InterbotixRobot(object):
     def set_single_trajectory_time(self, joint_name, moving_time=None, accel_time=None):
         if (moving_time != None):
             if self.use_time:
-                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Velocity", value=int(moving_time * 1000))
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=joint_name, addr_name="Profile_Velocity", value=int(moving_time * 1000))
             else:
-                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Velocity", value=int(moving_time))
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=joint_name, addr_name="Profile_Velocity", value=int(moving_time))
         if (accel_time != None):
             if self.use_time:
-                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Acceleration", value=int(accel_time * 1000))
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=joint_name, addr_name="Profile_Acceleration", value=int(accel_time * 1000))
             else:
-                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Profile_Acceleration", value=int(accel_time))
+                self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=joint_name, addr_name="Profile_Acceleration", value=int(accel_time))
 
 # ******************************** PUBLIC FUNCTIONS IF CONTROLLING AN INTERBOTIX ARM (NOT TURRET)  ********************************
 
@@ -411,7 +411,7 @@ class InterbotixRobot(object):
     def set_single_joint_operating_mode(self, joint_name, mode, leave_torqued_off=False):
         self.srv_set_op(cmd=OperatingModesRequest.SINGLE_JOINT, mode=mode, joint_name=joint_name)
         if leave_torqued_off:
-            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[joint_name]], addr_name="Torque_Enable", value=0)
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=joint_name, addr_name="Torque_Enable", value=0)
 
     ### @brief Command a single joint with a specific value
     ### @param joint_name - name of the joint to control
@@ -441,10 +441,10 @@ class InterbotixRobot(object):
     ### @param joint_names - list of joints to torque on
     def torque_joints_on(self, joint_names):
         for name in joint_names:
-            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[name]], addr_name="Torque_Enable", value=1)
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=name, addr_name="Torque_Enable", value=1)
 
     ### @brief Torque off specific joints
     ### @param joint_names - list of joints to torque off
     def torque_joints_off(self, joint_names):
         for name in joint_names:
-            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=self.resp.joint_ids[self.joint_indx_dict[name]], addr_name="Torque_Enable", value=0)
+            self.srv_set_register(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name=name, addr_name="Torque_Enable", value=0)

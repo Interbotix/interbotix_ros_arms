@@ -617,8 +617,8 @@ class TurretControlGUI(QWidget):
                 positions = list(self.joint_states.position)
             pan_time = int(abs(pan_desired - positions[0]) / self.deg2rad(velocity) * 1000)
             tilt_time = int(abs(tilt_desired - positions[1]) / self.deg2rad(velocity) * 1000)
-            pan_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=1, addr_name="Profile_Velocity", value=pan_time)
-            tilt_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, id=2, addr_name="Profile_Velocity", value=tilt_time)
+            pan_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name="pan", addr_name="Profile_Velocity", value=pan_time)
+            tilt_resp = self.srv_motor_registers(cmd=RegisterValuesRequest.SINGLE_MOTOR, motor_name="tilt", addr_name="Profile_Velocity", value=tilt_time)
             return max(pan_time, tilt_time)
 
 # Helper functions to manage the 'Trajectory' table
