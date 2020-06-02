@@ -559,7 +559,7 @@ bool RobotArm::arm_init_controlItems(void)
   const ControlItem *goal_current = dxl_wb.getItemInfo(it->motor_id, "Goal_Current");
   // only return an error if the motor is not an XL430; otherwise, as XL430s don't have this register, just skip it
   const char* model_name = dxl_wb.getModelName(it->motor_id, &log);
-  if (goal_current == NULL && strncmp(model_name, "XL430", strlen("XL430")) != 0) return false;
+  if (goal_current == NULL && strncmp(model_name, "XM", 2) == 0) return false;
 
   const ControlItem *goal_pwm = dxl_wb.getItemInfo(it->motor_id, "Goal_PWM");
   if (goal_pwm == NULL) return false;
@@ -1050,6 +1050,12 @@ bool RobotArm::arm_torque_joints_off(std_srvs::Empty::Request &req, std_srvs::Em
 bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, interbotix_sdk::RobotInfo::Response &res)
 {
   // Parse the urdf model to get joint position and velocity limits
+  if (!ros::param::has(robot_name + "/robot_description"))
+  {
+    ROS_WARN("The %s/robot_description parameter was not found!", robot_name.c_str());
+    return false;
+  }
+
   urdf::Model model;
   model.initParam(robot_name + "/robot_description");
   for (auto const& joint:all_joints)

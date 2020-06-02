@@ -1,6 +1,7 @@
 <launch>
 
   <arg name="robot_name"                      default=""/>
+  <arg name="use_default_rviz"                default="true"/>
   <arg name="threshold"                       default="0.75"/>
   <arg name="controller"                      default="ps4"/>
   <arg name="arm_run"                         default="true"/>
@@ -9,9 +10,10 @@
     <arg name="robot_name"                    value="$(arg robot_name)"/>
     <arg name="arm_operating_mode"            value="position"/>
     <arg name="arm_profile_velocity"          value="200"/>
-    <arg name="arm_profile_acceleration"      value="200"/>
+    <arg name="arm_profile_acceleration"      value="100"/>
     <arg name="gripper_operating_mode"        value="pwm"/>
     <arg name="use_time_based_profile"        value="true"/>
+    <arg name="use_default_rviz"              value="$(arg use_default_rviz)"/>
   </include>
 
   <node
