@@ -1050,7 +1050,7 @@ bool RobotArm::arm_torque_joints_off(std_srvs::Empty::Request &req, std_srvs::Em
 bool RobotArm::arm_get_robot_info(interbotix_sdk::RobotInfo::Request &req, interbotix_sdk::RobotInfo::Response &res)
 {
   // Parse the urdf model to get joint position and velocity limits
-  if (!ros::param::has(robot_name + "/robot_description"))
+  if (!ros::param::has("robot_description"))
   {
     ROS_WARN("The %s/robot_description parameter was not found!", robot_name.c_str());
     return false;
