@@ -1,6 +1,10 @@
 # InterbotiX X-Series Arm & Turret ROS Packages
 ![banner](images/banner.png)
 
+NOTE: AS OF OCTOBER 29, 2020, THIS REPO IS IN LEGACY MODE!!!!!!
+
+Check out the new and improved arm repo at https://github.com/Interbotix/interbotix_ros_manipulators or turret repo at https://github.com/Interbotix/interbotix_ros_turrets. No hardware changes are needed to use those repos. Please note that to work with the new code, you should either delete or rename your old *interbotix_ws* catkin workspace to something else. Also note, that if you are commanding arm (not turret) joint positions directly in your code (not by commanding an end-effector pose, but actually commanding a joint position directly), the positive direction of the 'elbow' and 'wrist_angle' joints have been inverted. This is to keep consistency in the ROS frames at each joint. So just flip the sign on those commands if needed in your custom ROS packages or python scripts.
+
 ## Overview
 Welcome to the *interbotix_ros_arms* repo! This repository contains ROS packages meant to be used with the many [X-Series robotic arms](https://www.trossenrobotics.com/robotic-arms.aspx) and [X-Series Turrets](https://www.trossenrobotics.com/c/robot-turrets.aspx) sold by Trossen Robotics. Packages were tested on Ubuntu Linux 16.04 & 18.04 using ROS Kinetic and ROS Melodic respectively. Communication with the robot is done over USB via the [U2D2](https://www.trossenrobotics.com/dynamixel-u2d2.aspx). This device converts USB signals to TTL which allows a computer to 'talk' with each of the [Dynamixel servo motors](https://www.trossenrobotics.com/dynamixel-x-series-robot-servos) that make up each robot. For the most part, the ROS nodes were written in C++ with a couple nodes written in Python. However, any programming language capable of sending ROS messages can be used to control the robots. To that effect, the core packages that make up this repo are as follows:
 - **interbotix_descriptions:** contains the meshes and URDFs (including accurate inertial models for the robot-arm links) for the arms and turrets
